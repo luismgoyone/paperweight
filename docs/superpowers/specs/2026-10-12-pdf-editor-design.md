@@ -287,6 +287,8 @@ These are checks, not just intentions:
   img-src 'self' blob: data:; worker-src 'self' blob:;
   script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline';
   font-src 'self'; frame-ancestors 'none'`.
+  *Amended in Phase 1:* also `form-action 'none'; base-uri 'none'`, which
+  `default-src` does not cover.
 - Also `Referrer-Policy: no-referrer` and a `Permissions-Policy` that disables
   everything unused.
 - **Playwright privacy test (CI):** open a fixture, edit, download, and assert:

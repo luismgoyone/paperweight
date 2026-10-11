@@ -1,0 +1,8 @@
+dist
+node_modules
+tests/fixtures
+package-lock.json
+docs
+LICENSE
+playwright-report
+test-results
