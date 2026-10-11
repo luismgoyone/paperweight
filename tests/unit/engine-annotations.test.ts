@@ -15,7 +15,7 @@ function session(name = 'simple.pdf') {
 }
 
 function reopenAnnots(s: EngineSession, page = 0) {
-  const doc = mupdf.Document.openDocument(s.save(), 'application/pdf').asPDF()!;
+  const doc = new mupdf.PDFDocument(s.save());
   return doc.loadPage(page).getAnnotations();
 }
 
