@@ -81,6 +81,8 @@ export function createEngineClient(): EngineClient {
         signal?.aborted ? Promise.reject(new CancelledError()) : remote.render(page, scale),
       ),
     search: (needle) => call(() => remote.search(needle)),
+    textRuns: (page) => call(() => remote.textRuns(page)),
+    selectText: (page, a, b) => call(() => remote.selectText(page, a, b)),
     save: () => call(() => remote.save()),
     close: () => call(() => remote.close()),
     registerFont: (id, bytes) => call(() => remote.registerFont(id, bytes)),
