@@ -57,3 +57,24 @@ export function styleForPdfFont(pdfFontName: string): FontStyleKey {
   const name = pdfFontName.toLowerCase();
   return { bold: /bold|black|heavy|semibold/.test(name), italic: /italic|oblique/.test(name) };
 }
+
+/** Line height of added text, as a multiple of the font size (also used by the editor overlay). */
+export const LINE_HEIGHT = 1.2;
+
+// hhea ascender/descender in em, read from the bundled files (same for every style of a family).
+// Browsers use these to place the baseline inside a CSS line box, so using them here keeps the
+// on-canvas editor and the rendered PDF text in the same place.
+const METRICS: Record<FontFamily, { ascent: number; descent: number }> = {
+  'Liberation Sans': { ascent: 0.9053, descent: 0.2119 },
+  'Liberation Serif': { ascent: 0.8911, descent: 0.2163 },
+  'Liberation Mono': { ascent: 0.8325, descent: 0.3003 },
+  Inter: { ascent: 0.9688, descent: 0.2412 },
+  'Noto Sans': { ascent: 1.069, descent: 0.293 },
+  'Noto Serif': { ascent: 1.069, descent: 0.293 },
+};
+
+/** Distance from the top of a text box to its first baseline, in points (CSS half-leading model). */
+export function firstBaselineOffset(family: FontFamily, size: number): number {
+  const { ascent, descent } = METRICS[family];
+  return ((LINE_HEIGHT - ascent - descent) / 2 + ascent) * size;
+}
