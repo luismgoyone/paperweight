@@ -5,8 +5,8 @@ A free PDF editor that runs entirely in your browser. **Files never leave your d
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.
 
-> Status: **Phase 1 (Core)**: open, view, search, and download. Editing tools arrive in later
-> phases (see [Roadmap](#roadmap)).
+> Status: **Phase 1 (Core)** is live at https://pdf-editor-navy.vercel.app. Phase 2 (markup and
+> add text) is in progress (see [Roadmap](#roadmap)).
 
 ## Privacy guarantees
 
