@@ -5,3 +5,4 @@ test-results
 *.local
 .DS_Store
 .vercel
+*.tsbuildinfo
