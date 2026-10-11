@@ -29,8 +29,5 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
 
 /** Pages whose rendering an op changes. Document-level ops change none. */
 export function pagesTouched(op: Op): number[] {
-  switch (op.kind) {
-    case 'meta.setTitle':
-      return [];
-  }
+  return 'page' in op ? [op.page] : [];
 }

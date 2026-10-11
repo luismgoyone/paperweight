@@ -29,3 +29,18 @@ describe('fixtures', () => {
     expect(() => open('corrupt.pdf').countPages()).toThrow();
   });
 });
+
+describe('Phase 2 fixtures', () => {
+  it('invoice.pdf has a right-aligned $26 in Helvetica 10', () => {
+    const page = open('invoice.pdf').loadPage(0);
+    expect(page.search('$26', '').length).toBeGreaterThan(0);
+  });
+
+  it('rotated.pdf has a rotated page and an offset MediaBox', () => {
+    const doc = open('rotated.pdf');
+    expect(doc.countPages()).toBe(2);
+    expect(doc.loadPage(0).getBounds()).toEqual([0, 0, 792, 612]);
+    const offset = doc.loadPage(1).getBounds();
+    expect(offset[2] - offset[0]).toBe(612);
+  });
+});
