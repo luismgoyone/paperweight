@@ -1,0 +1,593 @@
+<!DOCTYPE html><html class="h-full" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>PDF Editor - Privacy-first Document Studio</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Inter Google Font -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS CDN with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Verbatim Tailwind Configuration -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-container-lowest": "#ffffff",
+            "secondary-fixed-dim": "#68dba9",
+            "on-surface": "#181c20",
+            "on-error-container": "#93000a",
+            "tertiary-fixed": "#ffdbcd",
+            "on-background": "#181c20",
+            "surface-tint": "#0053db",
+            "outline": "#737686",
+            "surface-dim": "#d7dadf",
+            "on-secondary": "#ffffff",
+            "on-primary-fixed-variant": "#003ea8",
+            "primary-container": "#2563eb",
+            "surface-variant": "#e0e3e8",
+            "on-secondary-container": "#00714e",
+            "on-primary-container": "#eeefff",
+            "primary-fixed-dim": "#b4c5ff",
+            "error-container": "#ffdad6",
+            "on-secondary-fixed": "#002114",
+            "on-error": "#ffffff",
+            "on-secondary-fixed-variant": "#005137",
+            "on-tertiary-container": "#ffede6",
+            "on-tertiary-fixed-variant": "#7d2d00",
+            "tertiary-container": "#bc4800",
+            "surface-container-high": "#e5e8ee",
+            "inverse-surface": "#2d3135",
+            "outline-variant": "#c3c6d7",
+            "surface-bright": "#f7f9ff",
+            "tertiary-fixed-dim": "#ffb596",
+            "surface": "#f7f9ff",
+            "secondary-fixed": "#85f8c4",
+            "surface-container": "#ebeef3",
+            "surface-container-highest": "#e0e3e8",
+            "surface-container-low": "#f1f4f9",
+            "background": "#f7f9ff",
+            "secondary": "#006c4a",
+            "inverse-primary": "#b4c5ff",
+            "on-tertiary-fixed": "#360f00",
+            "on-tertiary": "#ffffff",
+            "primary-fixed": "#dbe1ff",
+            "on-surface-variant": "#434655",
+            "primary": "#004ac6",
+            "error": "#ba1a1a",
+            "on-primary": "#ffffff",
+            "inverse-on-surface": "#eef1f6",
+            "secondary-container": "#82f5c1",
+            "tertiary": "#943700",
+            "on-primary-fixed": "#00174b"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "space-xs": "0.25rem",
+            "gutter": "0.75rem",
+            "space-md": "0.75rem",
+            "margin-mobile": "0.5rem",
+            "margin": "1rem",
+            "space-sm": "0.5rem",
+            "gutter-mobile": "0.5rem",
+            "space-lg": "1rem",
+            "space-xl": "1.5rem"
+          },
+          "fontFamily": {
+            "body-lg": ["Inter"],
+            "headline-md": ["Inter"],
+            "label-sm": ["Inter"],
+            "headline-lg": ["Inter"],
+            "body-md": ["Inter"],
+            "headline-sm": ["Inter"],
+            "tabular-mono": ["Inter"],
+            "body-sm": ["Inter"],
+            "display": ["Inter"],
+            "label-md": ["Inter"]
+          },
+          "fontSize": {
+            "body-lg": ["1rem", { "lineHeight": "1.5rem", "letterSpacing": "0em", "fontWeight": "400" }],
+            "headline-md": ["1rem", { "lineHeight": "1.5rem", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "label-sm": ["0.6875rem", { "lineHeight": "0.875rem", "letterSpacing": "0.04em", "fontWeight": "600" }],
+            "headline-lg": ["1.25rem", { "lineHeight": "1.75rem", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "body-md": ["0.875rem", { "lineHeight": "1.25rem", "letterSpacing": "0em", "fontWeight": "400" }],
+            "headline-sm": ["0.875rem", { "lineHeight": "1.25rem", "letterSpacing": "-0.005em", "fontWeight": "600" }],
+            "tabular-mono": ["0.75rem", { "lineHeight": "1rem", "letterSpacing": "0em", "fontWeight": "500" }],
+            "body-sm": ["0.75rem", { "lineHeight": "1rem", "letterSpacing": "0.01em", "fontWeight": "400" }],
+            "display": ["1.75rem", { "lineHeight": "2.25rem", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "label-md": ["0.8125rem", { "lineHeight": "1.125rem", "letterSpacing": "0.005em", "fontWeight": "500" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 1.125rem;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    /* Ambient document page shadow as prescribed */
+    .document-page-shadow {
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+    /* Subtle custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #c3c6d7;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #737686;
+    }
+  </style>
+</head>
+<body class="h-full bg-surface-container-low text-on-surface font-body-md antialiased overflow-hidden flex flex-col">
+<!-- ========================================== -->
+<!-- 1. TOP BAR (TopNavBar Shared Anchor)        -->
+<!-- ========================================== -->
+<header class="bg-surface-container-lowest dark:bg-inverse-surface border-b border-outline-variant dark:border-outline flex justify-between items-center px- space-lg w-full h-14 z-20 shrink-0 select-none overflow-x-auto gap-2">
+<!-- Left Section -->
+<div class="flex items-center gap-2 sm:gap-space-md shrink-0 min-w-0">
+<!-- Brand & Product Name -->
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary-container" data-icon="description">description</span>
+<span class="text-headline-sm font-headline-sm font-semibold text-on-surface dark:text-inverse-on-surface tracking-tight">PDF Editor</span>
+</div>
+<!-- Subtle vertical divider -->
+<div class="h-4 w-px bg-outline-variant"></div>
+<!-- Document Title Chip -->
+<div class="flex items-center gap-1.5 px-2 py-1 bg-surface-container-low hover:bg-surface-container rounded-lg border border-outline-variant transition-colors duration-150 cursor-pointer group max-w-[140px] md:max-w-xs shrink min-w-0">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors duration-150" data-icon="draft">draft</span>
+<span class="font-label-md text-label-md text-on-surface font-medium truncate">invoice-october.pdf</span>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-on-surface-variant text-[14px]" data-icon="edit">edit</span>
+</div>
+<!-- Undo / Redo Actions -->
+<div class="flex items-center gap-0.5 ml-1">
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-lg transition-colors duration-150 flex items-center justify-center" title="Undo (Cmd+Z)" type="button">
+<span class="material-symbols-outlined" data-icon="undo">undo</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-lg transition-colors duration-150 flex items-center justify-center" title="Redo (Cmd+Shift+Z)" type="button">
+<span class="material-symbols-outlined" data-icon="redo">redo</span>
+</button>
+</div>
+</div>
+<!-- Middle Section: Zoom, Page Stepper, In-document Search -->
+<div class="flex items-center gap-1.5 sm:gap-space-md shrink-0">
+<!-- Zoom Controls -->
+<div class="flex items-center bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden h-7">
+<button class="px-2 h-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface flex items-center justify-center transition-colors duration-150 border-r border-outline-variant" title="Zoom out" type="button">
+<span class="material-symbols-outlined text-sm" data-icon="remove">remove</span>
+</button>
+<div class="relative flex items-center">
+<select class="appearance-none bg-transparent pl-2.5 pr-6 h-full font-tabular-mono text-tabular-mono text-on-surface font-medium cursor-pointer border-0 py-0 focus:ring-0 focus:outline-none">
+<option>Fit width</option>
+<option>Fit page</option>
+<option>50%</option>
+<option>75%</option>
+<option>100%</option>
+<option>125%</option>
+<option>150%</option>
+</select>
+<span class="material-symbols-outlined pointer-events-none absolute right-1 text-on-surface-variant text-xs" data-icon="expand_more">expand_more</span>
+</div>
+<button class="px-2 h-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface flex items-center justify-center transition-colors duration-150 border-l border-outline-variant" title="Zoom in" type="button">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+</button>
+</div>
+<!-- Page Stepper -->
+<div class="flex items-center bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden h-7">
+<button class="px-1.5 h-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors duration-150 border-r border-outline-variant flex items-center justify-center" title="Previous page" type="button">
+<span class="material-symbols-outlined text-sm" data-icon="chevron_left">chevron_left</span>
+</button>
+<div class="flex items-center px-2 font-tabular-mono text-tabular-mono">
+<input class="w-5 text-center font-tabular-mono text-tabular-mono font-semibold text-primary p-0 border-0 focus:ring-0 focus:outline-none bg-transparent" type="text" value="3">
+<span class="text-on-surface-variant">/ 12</span>
+</div>
+<button class="px-1.5 h-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors duration-150 border-l border-outline-variant flex items-center justify-center" title="Next page" type="button">
+<span class="material-symbols-outlined text-sm" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+<!-- In-document Search Bar -->
+<div class="flex items-center bg-surface-container-lowest border border-outline-variant rounded-lg px-2 h-7 gap-1.5 focus-within:border-primary-container focus-within:ring-1 focus-within:ring-primary-container transition-all duration-150">
+<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="search">search</span>
+<input class="font-body-sm text-body-sm bg-transparent border-0 p-0 text-on-surface focus:ring-0 focus:outline-none w-20 tracking-normal" placeholder="Find in document..." type="text" value="tax">
+<span class="font-tabular-mono text-label-sm text-on-surface-variant bg-surface-container px-1 py-0.5 rounded border border-outline-variant font-medium">2 of 7</span>
+<div class="flex items-center text-on-surface-variant">
+<button class="p-0.5 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors duration-150 flex items-center justify-center" title="Jump previous" type="button">
+<span class="material-symbols-outlined text-sm" data-icon="keyboard_arrow_up">keyboard_arrow_up</span>
+</button>
+<button class="p-0.5 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors duration-150 flex items-center justify-center" title="Jump next" type="button">
+<span class="material-symbols-outlined text-sm" data-icon="keyboard_arrow_down">keyboard_arrow_down</span>
+</button>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface flex items-center justify-center ml-0.5" title="Clear search" type="button">
+<span class="material-symbols-outlined text-xs" data-icon="close">close</span>
+</button>
+</div>
+</div>
+<!-- Right Section: Privacy Pill, Source Code Link, Primary Download Button -->
+<div class="flex items-center gap-2 sm:gap-space-md shrink-0">
+<!-- Privacy Assurance Trust Pill Badge -->
+<div class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-surface-container rounded-full border border-secondary/30 text-secondary">
+<span class="material-symbols-outlined text-secondary text-sm" data-icon="shield" style="font-variation-settings: 'FILL' 1;">shield</span>
+<span class="font-tabular-mono text-label-sm font-semibold tracking-tight uppercase">Files never leave your device</span>
+</div>
+<!-- Navigation Link: Source Code -->
+<a class="hidden md:inline-flex font-label-md text-label-md text-on-surface-variant hover:text-on-surface items-center gap-1 transition-colors duration-150" href="#source">
+<span class="material-symbols-outlined text-sm" data-icon="code">code</span>
+<span class="">Source code</span>
+</a>
+<!-- Trailing Primary Action: Download PDF -->
+<button class="bg-primary-container hover:bg-primary text-on-primary font-headline-sm text-headline-sm font-medium px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition-colors duration-150" type="button">
+<span class="material-symbols-outlined text-base" data-icon="download">download</span>
+<span class="">Download PDF</span>
+</button>
+</div>
+</header>
+<!-- ========================================== -->
+<!-- WORKSPACE BODY: Left Rail + Canvas + Inspector -->
+<!-- ========================================== -->
+<div class="flex-1 flex overflow-hidden relative">
+<!-- 2. LEFT SIDEBAR (SideNavBar Shared Anchor) -->
+<aside aria-label="Document pages thumbnail manager" class="w-44 bg-surface-container-low dark:bg-inverse-surface border-r border-outline-variant dark:border-outline flex flex-col justify-between p-space-sm shrink-0 overflow-y-auto select-none">
+<!-- Top Rail Header & Page Cards -->
+<div class="flex flex-col gap-2">
+<!-- Header -->
+<div class="flex items-center justify-between px-1.5 pb-2 border-b border-outline-variant">
+<div>
+<h2 class="text-headline-sm font-headline-sm font-semibold text-on-surface dark:text-inverse-on-surface">Pages</h2>
+<p class="font-tabular-mono text-label-sm text-on-surface-variant">12 total pages</p>
+</div>
+<button class="p-1 hover:bg-surface-container text-on-surface-variant hover:text-on-surface rounded-lg transition-colors duration-150" title="View options" type="button">
+<span class="material-symbols-outlined text-sm" data-icon="view_compact">view_compact</span>
+</button>
+</div>
+<!-- Thumbnail Cards List -->
+<div class="flex flex-col gap-2.5 pt-1">
+<!-- Thumbnail 1 (Inactive) -->
+<div class="flex flex-col items-center group cursor-pointer">
+<div class="w-28 h-36 border border-outline-variant dark:border-outline bg-surface-container-lowest dark:bg-surface-container-high rounded-lg p-2.5 flex flex-col justify-between hover:border-primary-container hover:bg-surface-container transition-all duration-150 shadow-none">
+<div class="space-y-1.5 w-full opacity-60">
+<div class="h-2 w-12 bg-surface-container-highest rounded"></div>
+<div class="h-1.5 w-full bg-surface-container-high rounded"></div>
+<div class="h-1.5 w-4/5 bg-surface-container-high rounded"></div>
+<div class="h-1.5 w-full bg-surface-container-high rounded"></div>
+</div>
+<div class="h-8 w-full bg-surface-container rounded-sm flex items-center justify-center opacity-40">
+<span class="material-symbols-outlined text-outline-variant text-base" data-icon="article">article</span>
+</div>
+</div>
+<span class="font-tabular-mono text-label-sm text-on-surface-variant mt-1">Page 1</span>
+</div>
+<!-- Thumbnail 2 (Inactive) -->
+<div class="flex flex-col items-center group cursor-pointer">
+<div class="w-28 h-36 border border-outline-variant dark:border-outline bg-surface-container-lowest dark:bg-surface-container-high rounded-lg p-2.5 flex flex-col justify-between hover:border-primary-container hover:bg-surface-container transition-all duration-150 shadow-none">
+<div class="space-y-1.5 w-full opacity-60">
+<div class="h-1.5 w-full bg-surface-container-high rounded"></div>
+<div class="h-1.5 w-5/6 bg-surface-container-high rounded"></div>
+<div class="h-1.5 w-full bg-surface-container-high rounded"></div>
+<div class="h-1.5 w-2/3 bg-surface-container-high rounded"></div>
+</div>
+<div class="h-8 w-full bg-surface-container rounded-sm flex items-center justify-center opacity-40">
+<span class="material-symbols-outlined text-outline-variant text-base" data-icon="article">article</span>
+</div>
+</div>
+<span class="font-tabular-mono text-label-sm text-on-surface-variant mt-1">Page 2</span>
+</div>
+<!-- Thumbnail 3 (ACTIVE NAVIGATION ITEM - Highlighted) -->
+<div class="flex flex-col items-center group cursor-pointer">
+<div class="w-28 h-36 border-2 border-primary dark:border-inverse-primary bg-surface-container-lowest dark:bg-surface-container text-primary rounded-lg p-2.5 flex flex-col justify-between shadow-sm relative transition-all duration-150">
+<!-- Mini layout preview of invoice -->
+<div class="space-y-1 w-full">
+<div class="flex justify-between items-center">
+<div class="h-2 w-8 bg-primary rounded-xs"></div>
+<div class="h-1.5 w-5 bg-outline-variant rounded-xs"></div>
+</div>
+<div class="h-1 w-14 bg-outline-variant rounded-xs mt-2"></div>
+<div class="mt-2 space-y-0.5">
+<div class="h-1 w-full bg-surface-container-high rounded-xs"></div>
+<div class="h-1 w-full bg-surface-container-high rounded-xs"></div>
+<div class="h-1 w-3/4 bg-surface-container-high rounded-xs"></div>
+</div>
+</div>
+<div class="border-t border-outline-variant pt-1 flex justify-between items-center">
+<div class="h-1.5 w-6 bg-outline-variant rounded-xs"></div>
+<div class="h-1.5 w-4 bg-primary-container rounded-xs"></div>
+</div>
+</div>
+<span class="font-tabular-mono text-label-sm text-primary font-bold mt-1 px-2 py-0.5 bg-primary-fixed rounded-full">Page 3</span>
+</div>
+<!-- Thumbnail 4 (Inactive) -->
+<div class="flex flex-col items-center group cursor-pointer">
+<div class="w-28 h-36 border border-outline-variant dark:border-outline bg-surface-container-lowest dark:bg-surface-container-high rounded-lg p-2.5 flex flex-col justify-between hover:border-primary-container hover:bg-surface-container transition-all duration-150 shadow-none">
+<div class="space-y-1.5 w-full opacity-60">
+<div class="h-2 w-10 bg-surface-container-highest rounded"></div>
+<div class="h-1.5 w-full bg-surface-container-high rounded"></div>
+<div class="h-1.5 w-4/5 bg-surface-container-high rounded"></div>
+</div>
+<div class="h-8 w-full bg-surface-container rounded-sm flex items-center justify-center opacity-40">
+<span class="material-symbols-outlined text-outline-variant text-base" data-icon="article">article</span>
+</div>
+</div>
+<span class="font-tabular-mono text-label-sm text-on-surface-variant mt-1">Page 4</span>
+</div>
+<!-- Thumbnail 5 (Inactive) -->
+<div class="flex flex-col items-center group cursor-pointer">
+<div class="w-28 h-36 border border-outline-variant dark:border-outline bg-surface-container-lowest dark:bg-surface-container-high rounded-lg p-2.5 flex flex-col justify-between hover:border-primary-container hover:bg-surface-container transition-all duration-150 shadow-none">
+<div class="space-y-1.5 w-full opacity-60">
+<div class="h-1.5 w-full bg-surface-container-high rounded"></div>
+<div class="h-1.5 w-3/4 bg-surface-container-high rounded"></div>
+</div>
+<div class="h-8 w-full bg-surface-container rounded-sm flex items-center justify-center opacity-40">
+<span class="material-symbols-outlined text-outline-variant text-base" data-icon="article">article</span>
+</div>
+</div>
+<span class="font-tabular-mono text-label-sm text-on-surface-variant mt-1">Page 5</span>
+</div>
+<!-- Thumbnail 6 (Inactive) -->
+<div class="flex flex-col items-center group cursor-pointer">
+<div class="w-28 h-36 border border-outline-variant dark:border-outline bg-surface-container-lowest dark:bg-surface-container-high rounded-lg p-2.5 flex flex-col justify-between hover:border-primary-container hover:bg-surface-container transition-all duration-150 shadow-none">
+<div class="space-y-1.5 w-full opacity-60">
+<div class="h-1.5 w-full bg-surface-container-high rounded"></div>
+<div class="h-1.5 w-2/3 bg-surface-container-high rounded"></div>
+</div>
+<div class="h-8 w-full bg-surface-container rounded-sm flex items-center justify-center opacity-40">
+<span class="material-symbols-outlined text-outline-variant text-base" data-icon="article">article</span>
+</div>
+</div>
+<span class="font-tabular-mono text-label-sm text-on-surface-variant mt-1">Page 6</span>
+</div>
+</div>
+</div>
+<!-- Footer Action Tab (Settings) -->
+<div class="pt-3 border-t border-outline-variant mt-4">
+<button class="w-full flex items-center gap-2 px-2.5 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-lg transition-colors duration-150" type="button">
+<span class="material-symbols-outlined text-base" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</button>
+</div>
+</aside>
+<!-- 3. CENTER CANVAS (Document Viewport with Stacked Letter Pages) -->
+<main class="flex-1 bg-surface-container-low overflow-y-auto px-6 py-10 flex flex-col items-center gap-10 relative select-text">
+<!-- Peek of Page 2 (Above) -->
+<div class="w-full max-w-[760px] aspect-[8.5/11] bg-surface-container-lowest rounded-lg border border-outline-variant document-page-shadow p-12 text-on-surface opacity-30 pointer-events-none select-none flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div class="h-5 w-36 bg-surface-container-highest rounded"></div>
+<div class="h-4 w-20 bg-surface-container-high rounded"></div>
+</div>
+<div class="space-y-3">
+<div class="h-3 w-full bg-surface-container-high rounded"></div>
+<div class="h-3 w-5/6 bg-surface-container-high rounded"></div>
+<div class="h-3 w-4/6 bg-surface-container-high rounded"></div>
+</div>
+<div class="text-right font-tabular-mono text-label-sm text-outline">Page 2 of 12</div>
+</div>
+<!-- ACTIVE PAGE: Page 3 (Full Professional Invoice with Real Typography) -->
+<section aria-label="Page 3" class="w-full max-w-[760px] min-h-[980px] bg-surface-container-lowest rounded-lg border border-outline-variant document-page-shadow p-12 text-on-surface flex flex-col justify-between relative transition-shadow duration-200">
+<div>
+<!-- Document Header -->
+<div class="flex justify-between items-start pb-8 border-b border-surface-container-high">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-primary-container text-2xl" data-icon="token">token</span>
+<span class="text-headline-lg font-headline-lg text-on-surface tracking-tight">Acme Cloud Technologies Inc.</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">548 Market Street, Suite 39200</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">San Francisco, CA 94104 • compliance@acmecloud.io</p>
+</div>
+<div class="text-right">
+<h1 class="text-display font-display text-on-surface tracking-tight leading-none mb-2">INVOICE</h1>
+<div class="font-tabular-mono text-body-sm space-y-0.5 text-on-surface-variant">
+<p class=""><span class="text-outline">Invoice #:</span> <strong class="text-on-surface font-semibold">INV-2024-0891</strong></p>
+<p class=""><span class="text-outline">Date:</span> October 14, 2024</p>
+<p class=""><span class="text-outline">Due Date:</span> November 13, 2024</p>
+</div>
+</div>
+</div>
+<!-- Bill To Block -->
+<div class="grid grid-cols-2 gap-8 py-6 border-b border-surface-container-high">
+<div>
+<p class="font-label-sm text-label-sm uppercase tracking-wider text-outline mb-1.5 font-semibold">Bill To</p>
+<h3 class="font-headline-md text-headline-md text-on-surface font-semibold mb-1">Northwind Advisory Group</h3>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                742 Evergreen Plaza, 14th Floor<br>
+                Seattle, WA 98101<br>
+                Attn: Accounts Payable (ap@northwindadvisory.com)
+              </p>
+</div>
+<div class="flex flex-col justify-between font-body-sm text-body-sm">
+<div>
+<p class="font-label-sm text-label-sm uppercase tracking-wider text-outline mb-1.5 font-semibold">Project Reference</p>
+<p class="text-on-surface font-medium">Enterprise Cloud Infrastructure &amp; Privacy Isolation Q4</p>
+</div>
+<div class="bg-surface-container-low p-2.5 rounded-lg border border-outline-variant font-tabular-mono text-tabular-mono">
+<span class="text-secondary font-semibold">Encrypted Client Enclave ID:</span>
+<span class="text-on-surface ml-1">0x8F22...A9B4</span>
+</div>
+</div>
+</div>
+<!-- Line Items Table -->
+<div class="mt-6">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-surface-container-highest font-label-sm text-label-sm uppercase tracking-wider text-outline">
+<th class="py-2.5 font-semibold">Description</th>
+<th class="py-2.5 text-right font-semibold">Hours/Qty</th>
+<th class="py-2.5 text-right font-semibold">Unit Rate</th>
+<th class="py-2.5 text-right font-semibold">Amount</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md divide-y divide-surface-container-high">
+<!-- Line 1 -->
+<tr>
+<td class="py-3 pr-4">
+<p class="text-on-surface font-medium">Cloud Infrastructure Architecture &amp; Deployment</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Multi-region isolated VPC configuration and edge security provisioning.</p>
+</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono text-on-surface">42 hrs</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono text-on-surface">$160.00</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono font-medium text-on-surface">$6,720.00</td>
+</tr>
+<!-- Line 2 -->
+<tr>
+<td class="py-3 pr-4">
+<p class="text-on-surface font-medium">Enterprise Data Privacy &amp; Security Audit</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Zero-knowledge storage verification &amp; state audit compliance.</p>
+</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono text-on-surface">18 hrs</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono text-on-surface">$185.00</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono font-medium text-on-surface">$3,330.00</td>
+</tr>
+<!-- Line 3 -->
+<tr>
+<td class="py-3 pr-4">
+<p class="text-on-surface font-medium">High-throughput Event Streaming Pipeline</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Real-time local event parsing with zero telemetry leakage.</p>
+</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono text-on-surface">24 hrs</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono text-on-surface">$170.00</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono font-medium text-on-surface">$4,080.00</td>
+</tr>
+<!-- Line 4 -->
+<tr>
+<td class="py-3 pr-4">
+<p class="text-on-surface font-medium">Browser Sandbox Zero-Knowledge Storage Module</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                      In-memory cryptographic document manipulation engines with no 
+                      <!-- Search match occurrence 1 (subtle yellow) -->
+<mark class="bg-amber-100 text-on-surface px-1 py-0.5 rounded-xs border border-amber-300">tax</mark> 
+                      overhead.
+                    </p>
+</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono text-on-surface">30 hrs</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono text-on-surface">$175.00</td>
+<td class="py-3 text-right font-tabular-mono text-tabular-mono font-medium text-on-surface">$5,250.00</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Totals Calculation & Search Highlights -->
+<div class="mt-6 pt-4 border-t border-surface-container-high flex justify-end">
+<div class="w-72 space-y-2 font-tabular-mono text-tabular-mono">
+<div class="flex justify-between text-on-surface-variant">
+<span class="">Subtotal</span>
+<span class="">$19,380.00</span>
+</div>
+<!-- Sales Tax line with ACTIVE SEARCH MATCH (2 of 7 in distinct amber ring) -->
+<div class="flex justify-between items-center py-1 px-1.5 -mx-1.5 rounded-lg bg-surface-container-high/40">
+<span class="text-on-surface flex items-center gap-1">
+                  Sales 
+                  <mark class="bg-amber-400 text-on-surface font-semibold px-1 py-0.5 rounded border border-amber-500 shadow-xs ring-1 ring-amber-500/50">tax</mark> 
+                  (8.5%)
+                </span>
+<span class="text-on-surface font-medium">$1,647.30</span>
+</div>
+<div class="flex justify-between items-baseline pt-2 border-t border-outline-variant font-headline-lg text-headline-lg font-bold text-on-surface">
+<span class="">Total Due</span>
+<span class="text-primary-container">$21,027.30</span>
+</div>
+</div>
+</div>
+<!-- Payment Terms & Authorized Stamp -->
+<div class="mt-12 pt-6 border-t border-surface-container-high grid grid-cols-2 gap-8 items-end">
+<div class="font-body-sm text-body-sm text-on-surface-variant space-y-1">
+<p class="font-semibold text-on-surface">Payment Terms &amp; Wire Details:</p>
+<p class="">Payment due within 30 days of invoice receipt.</p>
+<p class="">Routing (ABA): <span class="font-tabular-mono text-on-surface font-medium">021000021</span></p>
+<p class="">Account #: <span class="font-tabular-mono text-on-surface font-medium">9844-3209-1823</span></p>
+<p class="text-outline text-xs mt-2">Local Cryptographic Hash: sha256-4f81c9...39e</p>
+</div>
+<!-- Signature Area with Clean Stamp -->
+<div class="flex flex-col items-end">
+<div class="border border-outline-variant rounded-lg p-3 bg-surface-container-low text-right max-w-[200px]">
+<div class="flex items-center justify-end gap-1 text-secondary text-xs font-semibold mb-1">
+<span class="material-symbols-outlined text-sm" data-icon="verified" style="font-variation-settings: 'FILL' 1;">verified</span>
+<span class="">Digitally Validated</span>
+</div>
+<div class="font-tabular-mono text-label-sm text-on-surface-variant font-medium">Acme Finance Office</div>
+<div class="text-[10px] text-outline font-tabular-mono">2024-10-14T09:34:12Z</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Document Bottom Footer Tag -->
+<div class="mt-8 pt-4 border-t border-surface-container-high flex justify-between items-center font-tabular-mono text-label-sm text-outline">
+<span class="">Acme Cloud Technologies Inc. • INV-2024-0891</span>
+<span class="font-semibold text-on-surface-variant">Page 3 of 12</span>
+</div>
+</section>
+<!-- Peek of Page 4 (Below) -->
+<div class="w-full max-w-[760px] aspect-[8.5/11] bg-surface-container-lowest rounded-lg border border-outline-variant document-page-shadow p-12 text-on-surface opacity-30 pointer-events-none select-none flex flex-col justify-between">
+<div class="space-y-4">
+<div class="h-4 w-48 bg-surface-container-highest rounded"></div>
+<div class="h-3 w-full bg-surface-container-high rounded"></div>
+<div class="h-3 w-11/12 bg-surface-container-high rounded"></div>
+<div class="h-3 w-4/5 bg-surface-container-high rounded"></div>
+</div>
+<div class="text-right font-tabular-mono text-label-sm text-outline">Page 4 of 12</div>
+</div>
+</main>
+<!-- 4. RIGHT PROPERTIES PANEL (Quiet Inspector Panel) -->
+<aside aria-label="Properties Inspector" class="w-64 bg-surface-container-lowest border-l border-outline-variant flex flex-col justify-between shrink-0 p-5 select-none z-10">
+<!-- Center Calm Empty State -->
+<div class="flex-1 flex flex-col items-center justify-center text-center px-2">
+<div class="w-12 h-12 rounded-xl border border-dashed border-outline-variant flex items-center justify-center text-outline mb-4 bg-surface-container-low">
+<span class="material-symbols-outlined text-2xl" data-icon="crop_free">crop_free</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm font-semibold text-on-surface mb-1">Select something to see its properties</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+          Click any text block, image, or table cell on the document canvas to view details.
+        </p>
+</div>
+<!-- Bottom Metadata Drawer -->
+<div class="pt-4 border-t border-outline-variant">
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-on-surface-variant text-base" data-icon="info">info</span>
+<h4 class="font-label-sm text-label-sm uppercase tracking-wider text-outline font-semibold">Document Specs</h4>
+</div>
+<div class="space-y-2 font-tabular-mono text-tabular-mono">
+<div class="flex justify-between items-center text-on-surface-variant">
+<span class="text-outline">Format</span>
+<span class="font-medium text-on-surface">PDF 1.7 (Letter)</span>
+</div>
+<div class="flex justify-between items-center text-on-surface-variant">
+<span class="text-outline">Pages</span>
+<span class="font-medium text-on-surface">12 Pages</span>
+</div>
+<div class="flex justify-between items-center text-on-surface-variant">
+<span class="text-outline">File size</span>
+<span class="font-medium text-on-surface">1.4 MB</span>
+</div>
+<div class="flex justify-between items-center text-on-surface-variant pt-2 border-t border-surface-container-high">
+<span class="text-outline">Storage</span>
+<span class="inline-flex items-center gap-1 text-secondary font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+              Local memory only
+            </span>
+</div>
+</div>
+</div>
+</aside>
+</div>
+
+
+</body></html>

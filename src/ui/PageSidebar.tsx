@@ -84,17 +84,17 @@ const Thumbnail = memo(function Thumbnail({
         aria-label={`Go to page ${page.index + 1}`}
         aria-current={active ? 'page' : undefined}
         onClick={() => goToPage(page.index)}
-        className="group flex w-full flex-col items-center gap-1.5 rounded-lg p-2 hover:bg-neutral-100"
+        className="group flex w-full flex-col items-center gap-1.5 rounded-lg p-2 hover:bg-slate-100"
       >
         <canvas
           ref={canvas}
           style={{ width: THUMB_WIDTH, height }}
-          className={`bg-white shadow-sm ${active ? 'ring-2 ring-blue-600' : 'ring-1 ring-neutral-900/10'}`}
+          className={`bg-white shadow-sm ${active ? 'ring-2 ring-blue-600' : 'ring-1 ring-slate-300'}`}
         />
         <span
-          className={`text-xs tabular-nums ${active ? 'font-medium text-blue-700' : 'text-neutral-500'}`}
+          className={`rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${active ? 'bg-blue-100 text-blue-700' : 'text-slate-500'}`}
         >
-          {page.index + 1}
+          Page {page.index + 1}
         </span>
       </button>
     </li>
@@ -110,9 +110,13 @@ export function PageSidebar() {
   return (
     <nav
       aria-label="Pages"
-      className="hidden w-44 shrink-0 overflow-y-auto border-r border-neutral-200 bg-white p-2 md:block"
+      className="hidden w-44 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-50 md:block"
     >
-      <ol className="space-y-1">
+      <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-4 pt-3 pb-2">
+        <h2 className="text-sm font-semibold text-slate-900">Pages</h2>
+        <p className="text-xs text-slate-500">{pages.length} total pages</p>
+      </div>
+      <ol className="space-y-1 p-2">
         {pages.map((page, i) => (
           <Thumbnail
             key={`${docId}:${i}`}

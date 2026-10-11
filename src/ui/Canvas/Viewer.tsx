@@ -83,7 +83,7 @@ export function Viewer() {
       ref={container}
       data-testid="viewer"
       onScroll={onScroll}
-      className="relative min-w-0 flex-1 overflow-auto bg-neutral-100"
+      className="relative min-w-0 flex-1 overflow-auto bg-slate-100"
     >
       <div
         style={{ height: totalHeight, width: Math.max(maxWidth + 2 * PAGE_GAP, viewport.width) }}
@@ -100,7 +100,7 @@ export function Viewer() {
               key={`${docId}:${i}`}
               data-testid="page"
               data-page={i + 1}
-              className="absolute bg-white shadow-sm ring-1 ring-neutral-900/5"
+              className="absolute bg-white shadow-sm ring-1 ring-slate-900/10"
               style={{ top: offsets[i], left, width, height: page.height * zoom }}
             >
               {i >= first && i <= last && (

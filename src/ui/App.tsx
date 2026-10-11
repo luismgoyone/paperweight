@@ -3,6 +3,7 @@ import { useEditor } from '../editor/store';
 import { Viewer } from './Canvas/Viewer';
 import { EmptyState } from './EmptyState';
 import { PageSidebar } from './PageSidebar';
+import { PropertiesPanel } from './PropertiesPanel';
 import { PasswordDialog } from './dialogs/PasswordDialog';
 import { Toast } from './Toast';
 import { TopBar } from './TopBar';
@@ -61,7 +62,7 @@ export function App() {
   return (
     <div
       data-testid="drop-zone"
-      className="flex h-dvh flex-col bg-neutral-100 text-neutral-900"
+      className="flex h-dvh flex-col bg-slate-100 text-slate-900"
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);
@@ -89,9 +90,7 @@ export function App() {
           <>
             <PageSidebar />
             <Viewer />
-            <aside className="hidden w-64 shrink-0 border-l border-neutral-200 bg-white p-4 lg:block">
-              <p className="text-sm text-neutral-400">Select something to see its properties.</p>
-            </aside>
+            <PropertiesPanel />
           </>
         ) : (
           <div className="flex-1">
