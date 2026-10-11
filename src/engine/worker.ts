@@ -32,8 +32,8 @@ const api: EngineApi = {
   async selectText(page, a, b) {
     return selectText(session.doc, page, a, b);
   },
-  async save() {
-    const bytes = session.save();
+  async save(options) {
+    const bytes = session.save(options);
     return Comlink.transfer(bytes, [bytes.buffer]);
   },
   async close() {

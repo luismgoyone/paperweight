@@ -1,5 +1,5 @@
 import type { Op, OpenResult, PageInfo, Point, Quad, SearchHit, TextRun } from '../shared/types';
-import type { ChangedPages } from './document';
+import type { ChangedPages, SaveOptions } from './document';
 
 /** The engine's Comlink surface (spec §3.2). Implemented in worker.ts. */
 export interface EngineApi {
@@ -9,7 +9,7 @@ export interface EngineApi {
   search(needle: string): Promise<SearchHit[]>;
   textRuns(page: number): Promise<TextRun[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
-  save(): Promise<Uint8Array>;
+  save(options?: SaveOptions): Promise<Uint8Array>;
   close(): Promise<void>;
   /** Makes a bundled font available to text ops. Idempotent. */
   registerFont(id: string, bytes: Uint8Array): Promise<void>;
