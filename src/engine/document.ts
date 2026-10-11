@@ -1,5 +1,6 @@
 import * as mupdf from 'mupdf';
 import { DESTRUCTIVE_KINDS, type Op, type OpenResult, type PageInfo } from '../shared/types';
+import { ENGINE_BROKEN } from './api';
 import { applyOp, pagesTouched } from './ops';
 
 const PDF_MIME = 'application/pdf';
@@ -95,7 +96,15 @@ export class EngineSession {
       return { changedPages: 'all' };
     } catch (e) {
       for (const k of this.checkpoints.keys()) if (k > prefix) this.checkpoints.delete(k);
-      this.replay(previous, prefix);
+      try {
+        this.replay(previous, prefix);
+      } catch (restoreError) {
+        // The live document can't be trusted any more; the UI restarts the engine.
+        this.close();
+        throw Object.assign(new Error(`Could not restore the document: ${String(restoreError)}`), {
+          name: ENGINE_BROKEN,
+        });
+      }
       throw e;
     }
   }

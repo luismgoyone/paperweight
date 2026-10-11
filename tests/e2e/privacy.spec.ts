@@ -70,7 +70,7 @@ test('serves the §8 security headers', async ({ request }) => {
   const res = await request.get('/');
   const headers = res.headers();
   expect(headers['content-security-policy']).toBe(
-    "default-src 'self'; connect-src 'self'; img-src 'self' blob: data:; worker-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; frame-ancestors 'none'",
+    "default-src 'self'; connect-src 'self'; img-src 'self' blob: data:; worker-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'",
   );
   expect(headers['referrer-policy']).toBe('no-referrer');
   expect(headers['permissions-policy']).toContain('camera=()');

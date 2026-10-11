@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import * as Comlink from 'comlink';
-import { ENGINE_READY, type EngineApi } from './api';
+import { E2E_CRASH, ENGINE_READY, type EngineApi } from './api';
 import { EngineSession } from './document';
 import { renderPageRGBA, searchDocument } from './render';
 
@@ -34,6 +34,16 @@ const api: EngineApi = {
 };
 
 Comlink.expose(api);
+
+if (import.meta.env.VITE_E2E) {
+  self.addEventListener('message', (e) => {
+    if (e.data === E2E_CRASH) {
+      setTimeout(() => {
+        throw new Error('Simulated engine crash');
+      });
+    }
+  });
+}
 // `mupdf` uses top-level await to load its WASM, so by the time this line runs the
 // engine is usable. Tell the UI thread it can start sending requests.
 self.postMessage(ENGINE_READY);

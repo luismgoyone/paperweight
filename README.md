@@ -25,7 +25,7 @@ Security headers:
 ```
 Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' blob: data:;
   worker-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline';
-  font-src 'self'; frame-ancestors 'none'
+  font-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 Referrer-Policy: no-referrer
 ```
 

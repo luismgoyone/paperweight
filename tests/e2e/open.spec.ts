@@ -49,3 +49,33 @@ test('opens a PDF dropped onto the window', async ({ page }) => {
   await expect(page.getByTestId('file-name')).toHaveText('dropped.pdf');
   await expect(page.getByTestId('page')).toHaveCount(3);
 });
+
+test('cancelling the password for a second file keeps the first one and its edits', async ({
+  page,
+}) => {
+  await openFixture(page, 'simple.pdf');
+  await expect(page.getByTestId('page')).toHaveCount(3);
+  await page.evaluate(() =>
+    (window as unknown as { __editor: { commit(op: unknown): Promise<void> } }).__editor.commit({
+      kind: 'meta.setTitle',
+      title: 'Keep me',
+    }),
+  );
+  await openFixture(page, 'encrypted.pdf');
+  await page
+    .getByRole('dialog', { name: 'Password required' })
+    .getByRole('button', { name: 'Cancel' })
+    .click();
+  await expect(page.getByTestId('file-name')).toHaveText('simple.pdf');
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled();
+  await expect(page.locator('[data-page="1"] canvas[data-rendered]')).toBeAttached();
+});
+
+test('a corrupt second file shows a message and keeps the first one open', async ({ page }) => {
+  await openFixture(page, 'simple.pdf');
+  await expect(page.getByTestId('page')).toHaveCount(3);
+  await openFixture(page, 'corrupt.pdf');
+  await expect(page.getByRole('status')).toContainText('could not be opened');
+  await expect(page.getByTestId('file-name')).toHaveText('simple.pdf');
+  await expect(page.getByTestId('page')).toHaveCount(3);
+});

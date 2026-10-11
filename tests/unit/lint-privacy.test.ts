@@ -21,6 +21,12 @@ describe('privacy lint rule (spec §8)', () => {
     'fetch("https://evil.example/x");',
     'fetch(`http://x.example/${1}`);',
     'fetch("//evil.example/x");',
+    'globalThis.localStorage.setItem("a", "b");',
+    'self.indexedDB.open("x");',
+    'caches.open("x");',
+    'new XMLHttpRequest();',
+    'new WebSocket("wss://x.example");',
+    'new EventSource("/x");',
   ])('rejects %s', async (code) => {
     expect(await privacyViolations(code)).toBeGreaterThan(0);
   });

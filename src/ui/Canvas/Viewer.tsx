@@ -42,15 +42,26 @@ export function Viewer() {
   }, [viewport.width, viewport.height, zoomMode, pages, applyFit]);
 
   // Keep the same spot in the document under the viewport when the zoom changes.
-  const previousZoom = useRef(zoom);
+  // The last scroll position we know of. Read this instead of el.scrollTop when the zoom
+  // changes: by then the browser may already have clamped scrollTop to the shorter content.
+  const lastScrollTop = useRef(0);
+  const previous = useRef({ zoom, offsets });
   useLayoutEffect(() => {
     const el = container.current;
-    if (!el || previousZoom.current === zoom) return;
-    const ratio = zoom / previousZoom.current;
-    previousZoom.current = zoom;
-    el.scrollTop = el.scrollTop * ratio;
+    const before = previous.current;
+    previous.current = { zoom, offsets };
+    if (!el || before.zoom === zoom || before.offsets.length !== offsets.length) return;
+    // Anchor on the point a third of the way down the viewport (the one that decides the
+    // current page) and keep it on the same page spot; the gaps between pages don't scale.
+    const anchor = el.clientHeight / 3;
+    const top = lastScrollTop.current;
+    const page = pageAtOffset(before.offsets, top + anchor);
+    const within = (top + anchor - before.offsets[page]!) / before.zoom;
+    el.scrollTop = offsets[page]! + within * zoom - anchor;
+    el.scrollLeft = el.scrollLeft * (zoom / before.zoom);
+    lastScrollTop.current = el.scrollTop;
     setViewport((v) => ({ ...v, top: el.scrollTop }));
-  }, [zoom]);
+  }, [zoom, offsets]);
 
   // Scroll requests come from page navigation, thumbnails and search.
   useLayoutEffect(() => {
@@ -66,6 +77,7 @@ export function Viewer() {
         top + scrollRequest.y * zoom > el.scrollTop + 40 &&
         top + scrollRequest.y * zoom < el.scrollTop + el.clientHeight - 40;
       if (!alreadyVisible) el.scrollTop = target;
+      lastScrollTop.current = el.scrollTop;
       setViewport((v) => ({ ...v, top: el.scrollTop }));
     }
     clearScrollRequest();
@@ -74,6 +86,7 @@ export function Viewer() {
   const onScroll = () => {
     const el = container.current;
     if (!el) return;
+    lastScrollTop.current = el.scrollTop;
     setViewport((v) => ({ ...v, top: el.scrollTop }));
     setCurrentPage(pageAtOffset(offsets, el.scrollTop + el.clientHeight / 3));
   };

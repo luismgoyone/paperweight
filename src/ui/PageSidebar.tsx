@@ -4,17 +4,29 @@ import type { PageInfo } from '../shared/types';
 
 const THUMB_WIDTH = 120;
 
-// In-memory only (spec §3.4); dropped when another document opens.
-const cache = new Map<string, ImageBitmap>();
-let cacheDoc = -1;
+// In-memory only (spec §3.4): one bitmap per page, for the current document version.
+const cache = new Map<number, { docId: number; version: number; bitmap: ImageBitmap }>();
 
-function cached(docId: number, key: string): ImageBitmap | undefined {
-  if (docId !== cacheDoc) {
-    cache.forEach((b) => b.close());
-    cache.clear();
-    cacheDoc = docId;
+function lookup(docId: number, page: number, version: number): ImageBitmap | undefined {
+  const entry = cache.get(page);
+  return entry && entry.docId === docId && entry.version === version ? entry.bitmap : undefined;
+}
+
+function store(docId: number, page: number, version: number, bitmap: ImageBitmap): boolean {
+  const entry = cache.get(page);
+  // Never let a late render from an older document or version replace a newer entry.
+  if (entry && (entry.docId > docId || (entry.docId === docId && entry.version >= version))) {
+    return false;
   }
-  return cache.get(key);
+  if (entry && entry.docId !== docId) {
+    // A new document: drop everything from the old one.
+    cache.forEach((e) => e.bitmap.close());
+    cache.clear();
+  } else {
+    entry?.bitmap.close();
+  }
+  cache.set(page, { docId, version, bitmap });
+  return true;
 }
 
 const Thumbnail = memo(function Thumbnail({
@@ -38,14 +50,13 @@ const Thumbnail = memo(function Thumbnail({
     const el = canvas.current;
     const target = button.current;
     if (!el || !target) return;
-    const key = `${page.index}:${version}`;
-    let cancelled = false;
+    const abort = new AbortController();
     const draw = (bitmap: ImageBitmap) => {
       el.width = bitmap.width;
       el.height = bitmap.height;
       el.getContext('2d')?.drawImage(bitmap, 0, 0);
     };
-    const hit = cached(docId, key);
+    const hit = lookup(docId, page.index, version);
     if (hit) {
       draw(hit);
       return;
@@ -55,18 +66,17 @@ const Thumbnail = memo(function Thumbnail({
       if (!entries.some((e) => e.isIntersecting)) return;
       observer.disconnect();
       const scale = (THUMB_WIDTH * (window.devicePixelRatio || 1)) / page.width;
-      render(page.index, scale).then(
+      render(page.index, scale, abort.signal).then(
         (bitmap) => {
-          if (cached(docId, key)) return bitmap.close();
-          cache.set(key, bitmap);
-          if (!cancelled) draw(bitmap);
+          if (!store(docId, page.index, version, bitmap)) return bitmap.close();
+          if (!abort.signal.aborted) draw(bitmap);
         },
         () => undefined,
       );
     });
     observer.observe(target);
     return () => {
-      cancelled = true;
+      abort.abort();
       observer.disconnect();
     };
   }, [page.index, page.width, version, docId, render]);

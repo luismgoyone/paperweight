@@ -15,16 +15,16 @@ export const PageView = memo(function PageView({ page, zoom, version, docId }: P
   const activeHit = useEditor((s) => s.search.hits[s.search.active]);
 
   useEffect(() => {
-    let cancelled = false;
+    const abort = new AbortController();
     const dpr = window.devicePixelRatio || 1;
     let scale = zoom * dpr;
     const pixels = page.width * page.height * scale * scale;
     if (pixels > MAX_CANVAS_PIXELS) scale *= Math.sqrt(MAX_CANVAS_PIXELS / pixels);
 
-    render(page.index, scale).then(
+    render(page.index, scale, abort.signal).then(
       (bitmap) => {
         const el = canvas.current;
-        if (cancelled || !el) return bitmap.close();
+        if (abort.signal.aborted || !el) return bitmap.close();
         el.width = bitmap.width;
         el.height = bitmap.height;
         el.getContext('2d')?.drawImage(bitmap, 0, 0);
@@ -33,9 +33,7 @@ export const PageView = memo(function PageView({ page, zoom, version, docId }: P
       },
       () => undefined, // Document closed or replaced mid-render; the new one renders itself.
     );
-    return () => {
-      cancelled = true;
-    };
+    return () => abort.abort();
   }, [page.index, page.width, page.height, zoom, version, docId, render]);
 
   return (

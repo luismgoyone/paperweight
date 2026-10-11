@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { editedFileName } from '../shared/filename';
 import type { Op, PageInfo, SearchHit } from '../shared/types';
-import { createEngineClient, type EngineClient } from './engine-client';
+import { createEngineClient, createSerialQueue, type EngineClient } from './engine-client';
 import { History } from './history';
 import { clampZoom, fitPage, fitWidth, type ZoomMode } from './zoom';
 
 export const LARGE_FILE_BYTES = 200 * 1024 * 1024;
+const MAX_RESTARTS = 3;
 
 export type Status = 'empty' | 'loading' | 'password' | 'ready' | 'error';
 
@@ -40,8 +41,6 @@ export type EditorState = {
   toast: string | null;
 
   initEngine(): void;
-  /** Restarts the worker and replays the op log (what a crash triggers; spec §7). */
-  restartEngine(): Promise<void>;
   openFile(file: File): Promise<void>;
   submitPassword(password: string): Promise<void>;
   cancelPassword(): void;
@@ -62,7 +61,7 @@ export type EditorState = {
   showToast(message: string): void;
   dismissToast(): void;
   /** Exposed for the engine-dependent views (rendering, thumbnails). */
-  render(page: number, scale: number): Promise<ImageBitmap>;
+  render(page: number, scale: number, signal?: AbortSignal): Promise<ImageBitmap>;
 };
 
 const EMPTY_SEARCH: SearchState = { query: '', hits: [], active: -1, searched: false };
@@ -71,7 +70,15 @@ const EMPTY_SEARCH: SearchState = { query: '', hits: [], active: -1, searched: f
 // All of it lives in memory only and is dropped with the tab (spec §2).
 let engine: EngineClient | null = null;
 const history = new History();
-let source: { bytes: Uint8Array; name: string; password?: string } | null = null;
+type Source = { bytes: Uint8Array; name: string; password?: string };
+/** The document that is open in the engine. */
+let source: Source | null = null;
+/** A file being opened (e.g. waiting for its password); replaces `source` only once it opens. */
+let pending: Source | null = null;
+let restarts = 0;
+// History changes and the engine sync that follows them run one at a time, so a failed op
+// is always the last one pushed and a download always saves the state it marks as saved.
+const exclusive = createSerialQueue();
 
 function engineOrThrow(): EngineClient {
   if (!engine) throw new Error('The PDF engine is not running');
@@ -121,12 +128,24 @@ export const useEditor = create<EditorState>()((set, get) => {
   const recover = async (crashed: EngineClient) => {
     if (engine !== crashed) return;
     crashed.terminate();
+    if (++restarts > MAX_RESTARTS) {
+      engine = null;
+      set({
+        status: 'error',
+        error: 'The PDF engine keeps crashing. Reload the page to try again.',
+      });
+      return;
+    }
     const client = startEngine();
+    pending = null;
+    if (get().status === 'password' || get().status === 'loading') {
+      set({ status: source ? 'ready' : 'empty', passwordError: false });
+    }
     if (!source) return;
     try {
       const result = await client.open(source.bytes, source.password);
       if (result.status !== 'ok') throw new Error('Could not reopen the document');
-      await sync();
+      await exclusive(sync);
       bumpPages('all');
       get().showToast('The PDF engine restarted. No edits were lost.');
     } catch (e) {
@@ -135,16 +154,20 @@ export const useEditor = create<EditorState>()((set, get) => {
   };
 
   const openBytes = async (password?: string) => {
-    if (!source) return;
+    const file = pending;
+    if (!file) return;
+    const hadDocument = source !== null;
     set({ status: 'loading', error: null });
-    const result = await engineOrThrow().open(source.bytes, password);
+    const result = await engineOrThrow().open(file.bytes, password);
+    if (pending !== file) return; // Superseded by another open, or cancelled.
     switch (result.status) {
       case 'ok':
-        source.password = password;
+        source = { ...file, password };
+        pending = null;
         history.reset();
         set({
           status: 'ready',
-          fileName: source.name,
+          fileName: file.name,
           docId: get().docId + 1,
           pages: result.pages,
           pageVersions: result.pages.map(() => 0),
@@ -162,12 +185,18 @@ export const useEditor = create<EditorState>()((set, get) => {
       case 'wrong-password':
         set({ status: 'password', passwordError: true });
         return;
-      case 'error':
-        set({
-          status: 'error',
-          error: `This file could not be opened as a PDF. (${result.message})`,
-        });
+      case 'error': {
+        pending = null;
+        const error = `"${file.name}" could not be opened as a PDF. (${result.message})`;
+        // The engine keeps the previous document open, so keep showing it.
+        if (hadDocument) {
+          set({ status: 'ready' });
+          get().showToast(error);
+        } else {
+          set({ status: 'error', error });
+        }
         return;
+      }
     }
   };
 
@@ -194,71 +223,97 @@ export const useEditor = create<EditorState>()((set, get) => {
       if (!engine) startEngine();
     },
 
-    async restartEngine() {
-      if (engine) await recover(engine);
-    },
-
     async openFile(file) {
       if (file.size > LARGE_FILE_BYTES) {
         get().showToast('This file is over 200 MB. It may be slow or run out of memory.');
       }
-      source = { bytes: new Uint8Array(await file.arrayBuffer()), name: file.name };
+      pending = { bytes: new Uint8Array(await file.arrayBuffer()), name: file.name };
       try {
-        await openBytes();
+        await exclusive(() => openBytes());
       } catch (e) {
-        set({ status: 'error', error: messageOf(e) });
+        pending = null;
+        set({ status: source ? 'ready' : 'error', error: source ? null : messageOf(e) });
+        if (source) get().showToast(messageOf(e));
       }
     },
 
     async submitPassword(password) {
       try {
-        await openBytes(password);
+        await exclusive(() => openBytes(password));
       } catch (e) {
-        set({ status: 'error', error: messageOf(e) });
+        pending = null;
+        set({ status: source ? 'ready' : 'error', error: source ? null : messageOf(e) });
       }
     },
 
     cancelPassword() {
-      source = null;
-      set({ status: get().pages.length ? 'ready' : 'empty', passwordError: false });
+      pending = null;
+      set({ status: source ? 'ready' : 'empty', passwordError: false });
     },
 
-    async commit(op) {
-      history.push(op);
-      try {
-        await sync();
-      } catch (e) {
-        history.rejectLast();
+    commit(op) {
+      return exclusive(async () => {
+        history.push(op);
+        try {
+          await sync();
+        } catch (e) {
+          history.rejectLast();
+          set(historyFlags());
+          get().showToast(`That change could not be applied: ${messageOf(e)}`);
+        }
+      });
+    },
+
+    undo() {
+      return exclusive(async () => {
+        if (!history.canUndo) return;
+        history.undo();
+        try {
+          await sync();
+        } catch (e) {
+          history.redo();
+          set(historyFlags());
+          get().showToast(`Undo failed: ${messageOf(e)}`);
+        }
+      });
+    },
+
+    redo() {
+      return exclusive(async () => {
+        if (!history.canRedo) return;
+        history.redo();
+        try {
+          await sync();
+        } catch (e) {
+          history.undo();
+          set(historyFlags());
+          get().showToast(`Redo failed: ${messageOf(e)}`);
+        }
+      });
+    },
+
+    download() {
+      return exclusive(async () => {
+        if (!source) return;
+        let bytes: Uint8Array;
+        try {
+          bytes = await engineOrThrow().save();
+        } catch (e) {
+          get().showToast(`The PDF could not be saved: ${messageOf(e)}`);
+          return;
+        }
+        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = editedFileName(get().fileName);
+        document.body.append(a);
+        a.click();
+        a.remove();
+        // Revoking immediately can cancel the download in some browsers.
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        history.markSaved();
         set(historyFlags());
-        get().showToast(`That change could not be applied: ${messageOf(e)}`);
-      }
-    },
-
-    async undo() {
-      if (!history.canUndo) return;
-      history.undo();
-      await sync();
-    },
-
-    async redo() {
-      if (!history.canRedo) return;
-      history.redo();
-      await sync();
-    },
-
-    async download() {
-      if (get().status !== 'ready') return;
-      const bytes = await engineOrThrow().save();
-      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = editedFileName(get().fileName);
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-      history.markSaved();
-      set(historyFlags());
+      });
     },
 
     setZoom(zoom) {
@@ -335,17 +390,17 @@ export const useEditor = create<EditorState>()((set, get) => {
       set({ toast: null });
     },
 
-    render(page, scale) {
-      return engineOrThrow().render(page, scale);
+    render(page, scale, signal) {
+      return engineOrThrow().render(page, scale, signal);
     },
   };
 });
 
-// Phase 1 has no editing tool, so the trivial op is reachable only through this hook,
-// which the e2e tests use (`/#e2e`). It exposes nothing the UI couldn't already do.
-if (import.meta.env.MODE !== 'production' || window.location.hash === '#e2e') {
+// Phase 1 has no editing tool, so the trivial op is reachable only through this hook, which
+// exists only in the build the Playwright suite runs (VITE_E2E=1), never in production.
+if (import.meta.env.VITE_E2E) {
   (window as unknown as { __editor: unknown }).__editor = {
     commit: (op: Op) => useEditor.getState().commit(op),
-    simulateEngineCrash: () => useEditor.getState().restartEngine(),
+    simulateEngineCrash: () => engine?.simulateCrash(),
   };
 }

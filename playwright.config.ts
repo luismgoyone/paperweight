@@ -14,9 +14,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
     acceptDownloads: true,
   },
-  // Runs against the production build with the production security headers (vercel.json).
+  // Runs against a production build (plus test hooks, VITE_E2E) with the vercel.json headers.
   webServer: {
-    command: 'npm run build && npm run preview',
+    command: 'VITE_E2E=1 npm run build && npm run preview',
     port: 4173,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

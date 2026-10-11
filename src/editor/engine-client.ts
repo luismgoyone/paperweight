@@ -1,5 +1,5 @@
 import * as Comlink from 'comlink';
-import { ENGINE_READY, type EngineApi } from '../engine/api';
+import { E2E_CRASH, ENGINE_READY, isCrashError, type EngineApi } from '../engine/api';
 import type { OpenResult } from '../shared/types';
 
 export type Enqueue = <T>(task: () => Promise<T>) => Promise<T>;
@@ -14,12 +14,23 @@ export function createSerialQueue(): Enqueue {
   };
 }
 
-export type EngineClient = EngineApi & {
+export class CancelledError extends Error {
+  constructor() {
+    super('Cancelled');
+    this.name = 'CancelledError';
+  }
+}
+
+export type EngineClient = Omit<EngineApi, 'render'> & {
+  /** Queued renders whose signal is aborted before they start are skipped. */
+  render(page: number, scale: number, signal?: AbortSignal): Promise<ImageBitmap>;
   /** Resolves once MuPDF's WASM has loaded in the worker. */
   ready: Promise<void>;
   terminate(): void;
-  /** Called if the worker dies unexpectedly (spec §7). */
+  /** Called at most once if the engine dies after loading (spec §7). */
   onCrash(listener: (error: unknown) => void): void;
+  /** Test-only: makes the worker throw an uncaught error (E2E builds only). */
+  simulateCrash(): void;
 };
 
 export function createEngineClient(): EngineClient {
@@ -27,37 +38,59 @@ export function createEngineClient(): EngineClient {
     type: 'module',
     name: 'pdf-engine',
   });
+
+  let loaded = false;
+  let crashed = false;
+  const crashListeners: ((error: unknown) => void)[] = [];
+  const crash = (error: unknown) => {
+    // A load failure is reported through `ready`, not as a crash, so it can't restart-loop.
+    if (!loaded || crashed) return;
+    crashed = true;
+    crashListeners.forEach((l) => l(error));
+  };
+
   const ready = new Promise<void>((resolve, reject) => {
-    const onMessage = (e: MessageEvent) => {
+    worker.addEventListener('message', (e: MessageEvent) => {
       if (e.data !== ENGINE_READY) return;
-      worker.removeEventListener('message', onMessage);
+      loaded = true;
       resolve();
-    };
-    worker.addEventListener('message', onMessage);
-    worker.addEventListener('error', (e) => reject(e.error ?? new Error(e.message)), {
-      once: true,
     });
+    worker.addEventListener('error', (e) => {
+      const error = e.error ?? new Error(e.message || 'The PDF engine stopped');
+      if (loaded) crash(error);
+      else reject(error);
+    });
+    worker.addEventListener('messageerror', (e) => crash(e));
   });
+
   const remote = Comlink.wrap<EngineApi>(worker);
   const enqueue = createSerialQueue();
-  const call: Enqueue = (task) => enqueue(() => ready.then(task));
+  const call: Enqueue = (task) =>
+    enqueue(() => ready.then(task)).catch((e: unknown) => {
+      if (isCrashError(e)) crash(e);
+      throw e;
+    });
 
   return {
     ready,
     // Bytes are copied, not transferred: the UI keeps the original to restart a crashed worker.
     open: (bytes, password) => call(() => remote.open(bytes, password) as Promise<OpenResult>),
     setOps: (ops) => call(() => remote.setOps(ops)),
-    render: (page, scale) => call(() => remote.render(page, scale)),
+    render: (page, scale, signal) =>
+      call(() =>
+        signal?.aborted ? Promise.reject(new CancelledError()) : remote.render(page, scale),
+      ),
     search: (needle) => call(() => remote.search(needle)),
     save: () => call(() => remote.save()),
     close: () => call(() => remote.close()),
     terminate: () => {
+      crashed = true;
       remote[Comlink.releaseProxy]();
       worker.terminate();
     },
     onCrash: (listener) => {
-      worker.addEventListener('error', (e) => listener(e.error ?? new Error(e.message)));
-      worker.addEventListener('messageerror', (e) => listener(e));
+      crashListeners.push(listener);
     },
+    simulateCrash: () => worker.postMessage(E2E_CRASH),
   };
 }

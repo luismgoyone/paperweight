@@ -82,3 +82,16 @@ test('scrolls 100 pages without long frames (smoke check)', async ({ page }) => 
   });
   expect(worst).toBeLessThan(100);
 });
+
+test('keeps the same page in view when zooming deep into the document', async ({ page }) => {
+  const box = page.getByLabel('Current page');
+  await box.fill('80');
+  await box.press('Enter');
+  await expect(box).toHaveValue('80');
+  await page.getByLabel('Zoom', { exact: true }).selectOption('1');
+  await expect(box).toHaveValue('80');
+  await page.getByLabel('Zoom', { exact: true }).selectOption('2');
+  await expect(box).toHaveValue('80');
+  await page.getByLabel('Zoom', { exact: true }).selectOption('0.5');
+  await expect(box).toHaveValue('80');
+});
