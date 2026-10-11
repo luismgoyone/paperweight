@@ -23,6 +23,8 @@ export type EditorState = {
   error: string | null;
   passwordError: boolean;
   fileName: string;
+  /** Changes every time a document is opened; keys in-memory render caches. */
+  docId: number;
   pages: PageInfo[];
   /** Bumped per page when its rendering may have changed; views re-render on change. */
   pageVersions: number[];
@@ -141,6 +143,7 @@ export const useEditor = create<EditorState>()((set, get) => {
         set({
           status: 'ready',
           fileName: source.name,
+          docId: get().docId + 1,
           pages: result.pages,
           pageVersions: result.pages.map(() => 0),
           currentPage: 0,
@@ -172,6 +175,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     error: null,
     passwordError: false,
     fileName: '',
+    docId: 0,
     pages: [],
     pageVersions: [],
     zoom: 1,
