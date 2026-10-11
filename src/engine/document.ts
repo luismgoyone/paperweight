@@ -1,7 +1,13 @@
 import * as mupdf from 'mupdf';
-import type { OpenResult, PageInfo } from '../shared/types';
+import { DESTRUCTIVE_KINDS, type Op, type OpenResult, type PageInfo } from '../shared/types';
+import { applyOp, pagesTouched } from './ops';
 
 const PDF_MIME = 'application/pdf';
+const CHECKPOINT_EVERY = 20;
+
+export type ChangedPages = number[] | 'all';
+
+const sameOp = (a: Op, b: Op) => a === b || JSON.stringify(a) === JSON.stringify(b);
 
 function errorMessage(e: unknown): string {
   return e instanceof Error && e.message ? e.message : String(e);
@@ -10,8 +16,10 @@ function errorMessage(e: unknown): string {
 /** One open document inside the engine worker. No DOM, no React. */
 export class EngineSession {
   private current: mupdf.PDFDocument | null = null;
-  private originalBytes: Uint8Array | null = null;
   private password: string | undefined;
+  private applied: Op[] = [];
+  // Op count -> document bytes after that many ops (spec §3.3). 0 is the original file.
+  private checkpoints = new Map<number, Uint8Array>();
 
   get doc(): mupdf.PDFDocument {
     if (!this.current) throw new Error('No document is open');
@@ -52,13 +60,73 @@ export class EngineSession {
 
     this.close();
     this.current = doc;
-    this.originalBytes = bytes;
     this.password = password;
+    this.checkpoints.set(0, bytes);
     return { status: 'ok', pages: this.pageInfo(), repaired: doc.wasRepaired() };
   }
 
-  /** Reopens the original bytes (used to rebuild before replaying ops). */
-  reopenFrom(bytes: Uint8Array): void {
+  get checkpointIndices(): number[] {
+    return [...this.checkpoints.keys()].filter((k) => k > 0).sort((a, b) => a - b);
+  }
+
+  /**
+   * Converges the live document to "original + target ops". Appended ops are applied
+   * incrementally; anything else (undo, branch) replays from the nearest checkpoint.
+   * If an op fails, the document is restored to its previous state and OpError is thrown.
+   */
+  setOps(target: Op[]): { changedPages: ChangedPages } {
+    const previous = this.applied;
+    let prefix = 0;
+    while (
+      prefix < previous.length &&
+      prefix < target.length &&
+      sameOp(previous[prefix]!, target[prefix]!)
+    ) {
+      prefix++;
+    }
+    for (const k of this.checkpoints.keys()) if (k > prefix) this.checkpoints.delete(k);
+
+    try {
+      if (prefix === previous.length) {
+        this.applyFrom(prefix, target);
+        return { changedPages: [...new Set(target.slice(prefix).flatMap(pagesTouched))] };
+      }
+      this.replay(target, prefix);
+      return { changedPages: 'all' };
+    } catch (e) {
+      for (const k of this.checkpoints.keys()) if (k > prefix) this.checkpoints.delete(k);
+      this.replay(previous, prefix);
+      throw e;
+    }
+  }
+
+  private replay(target: Op[], prefix: number): void {
+    const start = Math.max(...[...this.checkpoints.keys()].filter((k) => k <= prefix));
+    this.reopenFrom(this.checkpoints.get(start)!);
+    this.applied = target.slice(0, start);
+    this.applyFrom(start, target);
+  }
+
+  private applyFrom(start: number, target: Op[]): void {
+    for (let i = start; i < target.length; i++) {
+      const op = target[i]!;
+      if (DESTRUCTIVE_KINDS.has(op.kind) && !this.checkpoints.has(i)) {
+        this.checkpoints.set(i, this.snapshot());
+      }
+      applyOp(this.doc, op);
+      this.applied = target.slice(0, i + 1);
+      if ((i + 1) % CHECKPOINT_EVERY === 0) this.checkpoints.set(i + 1, this.snapshot());
+    }
+  }
+
+  private snapshot(): Uint8Array {
+    const buffer = this.doc.saveToBuffer('');
+    const bytes = buffer.asUint8Array().slice();
+    buffer.destroy();
+    return bytes;
+  }
+
+  private reopenFrom(bytes: Uint8Array): void {
     const doc = mupdf.Document.openDocument(bytes, PDF_MIME).asPDF();
     if (!doc) throw new Error('Checkpoint is not a PDF');
     if (doc.needsPassword() && this.password !== undefined) {
@@ -66,11 +134,6 @@ export class EngineSession {
     }
     this.current?.destroy();
     this.current = doc;
-  }
-
-  get original(): Uint8Array {
-    if (!this.originalBytes) throw new Error('No document is open');
-    return this.originalBytes;
   }
 
   pageInfo(): PageInfo[] {
@@ -97,7 +160,8 @@ export class EngineSession {
   close(): void {
     this.current?.destroy();
     this.current = null;
-    this.originalBytes = null;
     this.password = undefined;
+    this.applied = [];
+    this.checkpoints.clear();
   }
 }
