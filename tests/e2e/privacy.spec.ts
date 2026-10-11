@@ -77,20 +77,22 @@ test('serves the §8 security headers', async ({ request }) => {
 });
 
 test('the CSP blocks a third-party request if one were attempted', async ({ page }) => {
-  const violations: string[] = [];
-  page.on('console', (m) => {
-    if (/Content Security Policy/i.test(m.text())) violations.push(m.text());
-  });
   await page.goto('/#e2e');
   await expect(page.getByTestId('engine-ready')).toBeAttached({ timeout: 30_000 });
-  const outcome = await page.evaluate(async () => {
+  const result = await page.evaluate(async () => {
+    const violations: string[] = [];
+    document.addEventListener('securitypolicyviolation', (e) =>
+      violations.push(e.violatedDirective),
+    );
+    let outcome = 'sent';
     try {
       await fetch(['https:', '', 'example.com', 'x'].join('/'));
-      return 'sent';
     } catch {
-      return 'blocked';
+      outcome = 'blocked';
     }
+    await new Promise((r) => setTimeout(r, 100));
+    return { outcome, violations };
   });
-  expect(outcome).toBe('blocked');
-  expect(violations.length).toBeGreaterThan(0);
+  expect(result.outcome).toBe('blocked');
+  expect(result.violations).toContain('connect-src');
 });
