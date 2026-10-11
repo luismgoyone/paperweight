@@ -40,6 +40,8 @@ export type EditorState = {
   toast: string | null;
 
   initEngine(): void;
+  /** Restarts the worker and replays the op log (what a crash triggers; spec §7). */
+  restartEngine(): Promise<void>;
   openFile(file: File): Promise<void>;
   submitPassword(password: string): Promise<void>;
   cancelPassword(): void;
@@ -192,6 +194,10 @@ export const useEditor = create<EditorState>()((set, get) => {
       if (!engine) startEngine();
     },
 
+    async restartEngine() {
+      if (engine) await recover(engine);
+    },
+
     async openFile(file) {
       if (file.size > LARGE_FILE_BYTES) {
         get().showToast('This file is over 200 MB. It may be slow or run out of memory.');
@@ -340,5 +346,6 @@ export const useEditor = create<EditorState>()((set, get) => {
 if (import.meta.env.MODE !== 'production' || window.location.hash === '#e2e') {
   (window as unknown as { __editor: unknown }).__editor = {
     commit: (op: Op) => useEditor.getState().commit(op),
+    simulateEngineCrash: () => useEditor.getState().restartEngine(),
   };
 }
