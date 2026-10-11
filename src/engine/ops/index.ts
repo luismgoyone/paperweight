@@ -1,5 +1,6 @@
 import type * as mupdf from 'mupdf';
 import type { Op } from '../../shared/types';
+import { applyAnnotOp } from './annotations';
 import { applySetTitle } from './meta';
 
 /** An op could not be applied; the document stays at its prior state (spec §7). */
@@ -18,6 +19,10 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
     switch (op.kind) {
       case 'meta.setTitle':
         return applySetTitle(doc, op);
+      case 'annot.add':
+      case 'annot.update':
+      case 'annot.delete':
+        return applyAnnotOp(doc, op);
       default:
         throw new Error(`Unknown operation "${(op as { kind: string }).kind}"`);
     }
