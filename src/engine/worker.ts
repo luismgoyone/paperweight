@@ -2,6 +2,7 @@
 import * as Comlink from 'comlink';
 import { E2E_CRASH, ENGINE_READY, type EngineApi } from './api';
 import { EngineSession } from './document';
+import { registerFont } from './fonts';
 import { renderPageRGBA, searchDocument } from './render';
 
 const session = new EngineSession();
@@ -30,6 +31,9 @@ const api: EngineApi = {
   },
   async close() {
     session.close();
+  },
+  async registerFont(id, bytes) {
+    registerFont(id, bytes);
   },
 };
 

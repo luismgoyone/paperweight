@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { editedFileName } from '../shared/filename';
 import type { Op, PageInfo, SearchHit } from '../shared/types';
 import { createEngineClient, createSerialQueue, type EngineClient } from './engine-client';
+import { loadFonts } from './fonts';
 import { History } from './history';
 import { clampZoom, fitPage, fitWidth, type ZoomMode } from './zoom';
 
@@ -20,6 +21,8 @@ export type SearchState = {
 
 export type EditorState = {
   engineReady: boolean;
+  /** All bundled fonts are loaded in the browser and registered with the engine. */
+  fontsReady: boolean;
   status: Status;
   error: string | null;
   passwordError: boolean;
@@ -110,10 +113,23 @@ export const useEditor = create<EditorState>()((set, get) => {
     set(historyFlags());
   };
 
+  const registerFonts = async (client: EngineClient) => {
+    const fonts = await loadFonts();
+    await Promise.all([...fonts].map(([id, bytes]) => client.registerFont(id, bytes)));
+  };
+
   const startEngine = () => {
     const client = createEngineClient();
     engine = client;
     set({ engineReady: false });
+    registerFonts(client).then(
+      () => {
+        if (engine === client) set({ fontsReady: true });
+      },
+      (e) => {
+        if (engine === client) get().showToast(`Fonts failed to load: ${messageOf(e)}`);
+      },
+    );
     client.ready.then(
       () => {
         if (engine === client) set({ engineReady: true });
@@ -202,6 +218,7 @@ export const useEditor = create<EditorState>()((set, get) => {
 
   return {
     engineReady: false,
+    fontsReady: false,
     status: 'empty',
     error: null,
     passwordError: false,

@@ -20,6 +20,8 @@ test('no network after load, no third-party hosts, nothing stored', async ({
 
   await page.goto('/#e2e');
   await expect(page.getByTestId('engine-ready')).toBeAttached({ timeout: 30_000 });
+  // Bundled fonts are part of the initial load (fetched at startup, never on demand).
+  await expect(page.getByTestId('fonts-ready')).toBeAttached({ timeout: 30_000 });
   await page.waitForLoadState('networkidle');
   phase = 'after';
 

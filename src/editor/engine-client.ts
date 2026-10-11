@@ -83,6 +83,7 @@ export function createEngineClient(): EngineClient {
     search: (needle) => call(() => remote.search(needle)),
     save: () => call(() => remote.save()),
     close: () => call(() => remote.close()),
+    registerFont: (id, bytes) => call(() => remote.registerFont(id, bytes)),
     terminate: () => {
       crashed = true;
       remote[Comlink.releaseProxy]();

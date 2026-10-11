@@ -9,6 +9,8 @@ export interface EngineApi {
   search(needle: string): Promise<SearchHit[]>;
   save(): Promise<Uint8Array>;
   close(): Promise<void>;
+  /** Makes a bundled font available to text ops. Idempotent. */
+  registerFont(id: string, bytes: Uint8Array): Promise<void>;
 }
 
 /** Posted by the worker once MuPDF's WASM has loaded and the API is exposed. */
