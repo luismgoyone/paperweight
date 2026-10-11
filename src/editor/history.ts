@@ -49,6 +49,13 @@ export class History {
     if (this.canRedo) this.position++;
   }
 
+  /** Drops the op just pushed because the engine refused it (spec §7). */
+  rejectLast(): void {
+    if (this.position === 0) return;
+    this.log = this.log.slice(0, this.position - 1);
+    this.position = this.log.length;
+  }
+
   markSaved(): void {
     this.savedLog = this.active;
   }

@@ -73,4 +73,13 @@ describe('History', () => {
     expect(h.ops).toEqual([]);
     expect(h.dirty).toBe(false);
   });
+
+  it('rejectLast removes a refused op without leaving it redoable', () => {
+    const h = new History();
+    h.push(op('a'));
+    h.push(op('bad'));
+    h.rejectLast();
+    expect(h.active).toEqual([op('a')]);
+    expect(h.canRedo).toBe(false);
+  });
 });
