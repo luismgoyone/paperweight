@@ -13,6 +13,8 @@ async function openFlatForm(page: import('@playwright/test').Page, name = 'flat-
   await expect(page.locator('[data-page="1"] canvas[data-rendered]')).toBeAttached();
   await zoom100(page);
   await page.getByRole('button', { name: 'Form fill' }).click();
+  // Detection has finished once the banner says what it found.
+  await expect(page.getByRole('note')).not.toContainText('Looking for boxes');
 }
 
 function words(doc: mupdf.Document) {
@@ -34,6 +36,9 @@ test('click a detected box on a flat form and type into it', async ({ page }) =>
     'No fillable fields in this PDF. Click a highlighted box to type in it.',
   );
   await expect(page.getByTestId('slot')).toHaveCount(5); // Name, TIN, 3 checkboxes
+  // Each box has its own name for screen readers.
+  await expect(page.getByRole('button', { name: 'Checkbox 1 of 3' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Text box 1 of 2' })).toBeVisible();
 
   const at = await pagePoint(page, 1, 380, 111);
   await page.mouse.click(at.x, at.y);
@@ -48,8 +53,15 @@ test('click a detected box on a flat form and type into it', async ({ page }) =>
   await page.keyboard.press('Enter');
   await expect(editor).toBeHidden();
 
-  // The box stays clickable once filled.
+  // The box stays clickable once filled, and clicking it again edits that text (no second
+  // copy on top).
   await expect(page.getByTestId('slot')).toHaveCount(5);
+  await page.mouse.click(at.x, at.y);
+  await expect(editor).toHaveValue('JUAN DELA CRUZ');
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('JUAN DELA CRUZ');
+  await page.keyboard.press('Enter');
+  await expect(editor).toBeHidden();
 
   const event = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download PDF' }).click();
@@ -69,13 +81,13 @@ test('click a detected box on a flat form and type into it', async ({ page }) =>
 
 test('click a detected checkbox to tick it, again to clear it', async ({ page }) => {
   await openFlatForm(page);
-  const yes = page.getByRole('button', { name: 'Toggle checkbox' }).first();
-  await yes.click();
+  // The "Yes" checkbox, found by position rather than by detection order.
+  const at = await pagePoint(page, 1, 76, 157);
+  await page.mouse.click(at.x, at.y);
   await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled();
-  const ticked = await page.evaluate(
-    () => document.querySelectorAll('[data-testid="slot"]').length,
-  );
-  expect(ticked).toBe(5);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  await page.mouse.click(at.x, at.y);
 
   const event = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download PDF' }).click();
@@ -88,7 +100,7 @@ test('click a detected checkbox to tick it, again to clear it', async ({ page })
   expect(Math.abs(x.x - 76)).toBeLessThan(2);
   expect(Math.abs(x.y - 157)).toBeLessThan(3);
 
-  await yes.click();
+  await page.mouse.click(at.x, at.y);
   const again = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download PDF' }).click();
   doc = mupdf.Document.openDocument(readFileSync(await (await again).path()), 'application/pdf');

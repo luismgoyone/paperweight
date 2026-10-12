@@ -75,6 +75,8 @@ export type EditorState = {
   cancelPassword(): void;
   /** Applies an op; resolves false if it was rejected (the user has been told why). */
   commit(op: Op): Promise<boolean>;
+  /** Resolves once every edit already started has been applied. */
+  settled(): Promise<void>;
   /**
    * Changes an added object based on its latest committed state (`fn` returns the new object,
    * or null to delete it). Runs in order with other edits, so quick successive changes can't
@@ -457,6 +459,10 @@ export const useEditor = create<EditorState>()((set, get) => {
     cancelPassword() {
       pending = null;
       set({ status: source ? 'ready' : 'empty', passwordError: false });
+    },
+
+    settled() {
+      return exclusive(async () => undefined);
     },
 
     async commit(op) {

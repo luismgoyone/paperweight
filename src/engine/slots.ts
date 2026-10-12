@@ -8,7 +8,11 @@ import type { Slot } from '../shared/types';
 // flood-fill the near-white pixels, and keep the enclosed regions that are box-shaped.
 // Text inside a region isn't judged here; the editor knows which text the user added.
 
-const SCALE = 2; // pixels per point
+const SCALE = 2; // pixels per point, for ordinary page sizes
+const MAX_PIXELS = 8_000_000; // ~80 MB of working memory; big pages are rendered smaller
+const MIN_SCALE = 0.25; // below this, lines are too thin to trust: no detection
+const SCAN_MIN_SIDE = 10; // points, on pages without text (letter holes can't be told apart)
+const MAX_TALL = 3; // a text box taller than 3× its width can't hold a line (rotated pages)
 const WHITE = 235; // grey level above which a pixel counts as blank (grey label cells are ~217)
 const MIN_SIDE = 6; // points
 const MIN_FILL = 0.6; // share of the bounding box the region must cover
@@ -19,7 +23,9 @@ export function findSlots(doc: mupdf.Document, pageIndex: number): Slot[] {
   const page = doc.loadPage(pageIndex);
   let pix: mupdf.Pixmap | null = null;
   try {
-    const [bx, by] = page.getBounds();
+    const [bx, by, bx1, by1] = page.getBounds();
+    const scale = Math.min(SCALE, Math.sqrt(MAX_PIXELS / ((bx1 - bx) * (by1 - by))));
+    if (!(scale >= MIN_SCALE)) return [];
     // The holes inside letters ("o", "P", "8") are enclosed white areas too.
     const glyphs: mupdf.Rect[] = [];
     const stext = page.toStructuredText('');
@@ -40,7 +46,7 @@ export function findSlots(doc: mupdf.Document, pageIndex: number): Slot[] {
     }
     // Annotations are left out: highlights or notes don't change where the boxes are.
     pix = page.toPixmap(
-      mupdf.Matrix.scale(SCALE, SCALE),
+      mupdf.Matrix.scale(scale, scale),
       mupdf.ColorSpace.DeviceGray,
       false,
       false,
@@ -76,23 +82,31 @@ export function findSlots(doc: mupdf.Document, pageIndex: number): Slot[] {
         if (y < y0) y0 = y;
         if (y > y1) y1 = y;
         if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge = true;
-        const visit = (j: number) => {
-          if (label[j] !== 0) return;
-          label[j] = id;
-          stack[top++] = j;
-        };
-        if (x > 0) visit(i - 1);
-        if (x < w - 1) visit(i + 1);
-        if (y > 0) visit(i - w);
-        if (y < h - 1) visit(i + w);
+        if (x > 0 && label[i - 1] === 0) {
+          label[i - 1] = id;
+          stack[top++] = i - 1;
+        }
+        if (x < w - 1 && label[i + 1] === 0) {
+          label[i + 1] = id;
+          stack[top++] = i + 1;
+        }
+        if (y > 0 && label[i - w] === 0) {
+          label[i - w] = id;
+          stack[top++] = i - w;
+        }
+        if (y < h - 1 && label[i + w] === 0) {
+          label[i + w] = id;
+          stack[top++] = i + w;
+        }
       }
       // Touching the page edge: the margin around the form, not a box.
       if (edge) continue;
       const pw = x1 - x0 + 1;
       const ph = y1 - y0 + 1;
       if (count / (pw * ph) < MIN_FILL) continue;
-      const rect = { x: bx + x0 / SCALE, y: by + y0 / SCALE, w: pw / SCALE, h: ph / SCALE };
-      if (rect.w < MIN_SIDE || rect.h < MIN_SIDE) continue;
+      const rect = { x: bx + x0 / scale, y: by + y0 / scale, w: pw / scale, h: ph / scale };
+      const minSide = glyphs.length ? MIN_SIDE : SCAN_MIN_SIDE;
+      if (rect.w < minSide || rect.h < minSide) continue;
       const inGlyph = glyphs.some(
         (g) =>
           rect.x >= g[0] - 1 &&
@@ -107,6 +121,7 @@ export function findSlots(doc: mupdf.Document, pageIndex: number): Slot[] {
         rect.h <= MAX_CHECK &&
         aspect >= CHECK_ASPECT[0]! &&
         aspect <= CHECK_ASPECT[1]!;
+      if (!check && rect.h > rect.w * MAX_TALL) continue;
       slots.push({ kind: check ? 'check' : 'text', rect });
     }
     return slots;

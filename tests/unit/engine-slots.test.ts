@@ -44,3 +44,39 @@ describe('findSlots', () => {
     expect(findSlots(open('simple.pdf'), 0)).toEqual([]);
   });
 });
+
+function pagePdf(width: number, height: number, content: string, rotate: 0 | 90 = 0) {
+  const doc = new mupdf.PDFDocument();
+  const page = doc.addPage([0, 0, width, height], rotate, doc.addObject({}), content);
+  doc.insertPage(-1, page);
+  return mupdf.Document.openDocument(
+    doc.saveToBuffer('').asUint8Array().slice(),
+    'application/pdf',
+  );
+}
+
+// A 1000 × 40 pt box outlined with 1 pt lines, 100 pt from the top-left corner.
+const box = (pageHeight: number) =>
+  `0 g 100 ${pageHeight - 140} 1000 1 re f 100 ${pageHeight - 101} 1000 1 re f ` +
+  `100 ${pageHeight - 140} 1 40 re f 1099 ${pageHeight - 140} 1 40 re f`;
+
+describe('findSlots limits', () => {
+  it('keeps its memory bounded on huge pages and still finds large boxes', () => {
+    const start = performance.now();
+    const slots = findSlots(pagePdf(6000, 6000, box(6000)), 0);
+    expect(performance.now() - start).toBeLessThan(1500);
+    expect(slots.some((s) => s.kind === 'text' && s.rect.w > 990 && s.rect.w < 1000)).toBe(true);
+  });
+
+  it('skips boxes too tall and narrow for a line of text (e.g. a rotated page)', () => {
+    const slots = findSlots(pagePdf(1200, 1200, box(1200), 90), 0);
+    expect(slots).toEqual([]);
+  });
+
+  it('on pages without text (scans), ignores holes smaller than 10 pt', () => {
+    // A 9 pt square outline: a box on a page with text, but too small to trust on a scan.
+    const square =
+      '0 g 100 600 9 0.75 re f 100 608.25 9 0.75 re f 100 600 0.75 9 re f 108.25 600 0.75 9 re f';
+    expect(findSlots(pagePdf(612, 792, square), 0)).toEqual([]);
+  });
+});

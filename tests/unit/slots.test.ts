@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { EditorObject } from '../../src/editor/objects';
 import {
+  addedTextIn,
   checkMarkIn,
   checkSpecForSlot,
-  slotAt,
   textSpecForSlot,
   usableSlots,
 } from '../../src/editor/slots';
@@ -48,15 +48,6 @@ describe('usableSlots', () => {
   });
 });
 
-describe('slotAt', () => {
-  it('picks the smallest box under the point', () => {
-    const outer: Slot = { kind: 'text', rect: { x: 0, y: 0, w: 500, h: 500 } };
-    expect(slotAt([outer, yes], { x: 75, y: 155 })).toBe(yes);
-    expect(slotAt([outer, yes], { x: 300, y: 300 })).toBe(outer);
-    expect(slotAt([yes], { x: 300, y: 300 })).toBeNull();
-  });
-});
-
 describe('fill specs', () => {
   it('fits a text box inside the slot, vertically centred', () => {
     const spec = textSpecForSlot(name);
@@ -86,5 +77,14 @@ describe('fill specs', () => {
     expect(checkMarkIn(yes, [x], 0)?.id).toBe('x1');
     expect(checkMarkIn(yes, [x], 1)).toBeNull();
     expect(checkMarkIn(yes, [added('t', 'JUAN', box)], 0)).toBeNull();
+  });
+});
+
+describe('addedTextIn', () => {
+  it('finds the text the user already typed in a box', () => {
+    const typed = added('t1', 'JUAN', { x: 203, y: 104, w: 40, h: 14 });
+    expect(addedTextIn(name, [typed], 0)?.id).toBe('t1');
+    expect(addedTextIn(name, [typed], 1)).toBeNull();
+    expect(addedTextIn(yes, [typed], 0)).toBeNull();
   });
 });

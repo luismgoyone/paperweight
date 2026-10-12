@@ -99,7 +99,7 @@ Referrer-Policy: no-referrer
   boxes and checkboxes on the page and highlights them. Click a box to type in it (fitted to the
   box), or a checkbox to tick or clear an "X". Detection reads the rendered page (enclosed white
   areas without printed text), entirely in the browser; it can miss boxes, so Add text (T) is
-  there for the rest.
+  there for the rest. PDFs that have some real fields use those fields instead.
 
 ### Markup and add text (Phase 2)
 

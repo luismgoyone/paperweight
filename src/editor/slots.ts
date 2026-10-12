@@ -40,15 +40,6 @@ export function usableSlots(
   return slots.filter((s) => !printed.some((r) => overlaps(shrink(s.rect, 1), r.bbox)));
 }
 
-/** The innermost box under a point. */
-export function slotAt(slots: Slot[], p: Point): Slot | null {
-  let best: Slot | null = null;
-  for (const s of slots) {
-    if (contains(s.rect, p) && (!best || s.rect.w * s.rect.h < best.rect.w * best.rect.h)) best = s;
-  }
-  return best;
-}
-
 /** An empty text box sized to the slot, vertically centred, just inside its left edge. */
 export function textSpecForSlot(slot: Slot): TextSpec {
   const { rect } = slot;
@@ -77,19 +68,24 @@ export function checkSpecForSlot(
   };
 }
 
+/** Text the user already put in this box (its centre lies inside), if any. */
+export function addedTextIn(
+  slot: Slot,
+  objects: EditorObject[],
+  page: number,
+): Extract<EditorObject, { kind: 'text' }> | null {
+  for (const o of objects) {
+    if (o.kind === 'text' && o.page === page && contains(slot.rect, centre(o.spec.box))) return o;
+  }
+  return null;
+}
+
 /** The "X" the user already put in this checkbox, if any. */
 export function checkMarkIn(
   slot: Slot,
   objects: EditorObject[],
   page: number,
 ): EditorObject | null {
-  return (
-    objects.find(
-      (o) =>
-        o.kind === 'text' &&
-        o.page === page &&
-        o.spec.text.trim().toUpperCase() === 'X' &&
-        contains(slot.rect, centre(o.spec.box)),
-    ) ?? null
-  );
+  const mark = addedTextIn(slot, objects, page);
+  return mark && mark.spec.text.trim().toUpperCase() === 'X' ? mark : null;
 }

@@ -10,21 +10,22 @@ export function useSlots(page: number, enabled: boolean): Slot[] | null {
   const objects = useEditor((s) => s.objects);
   const version = useEditor((s) => s.pageVersions[page] ?? 0);
   const docId = useEditor((s) => s.docId);
-  const [slots, setSlots] = useState<Slot[] | null>(null);
+  // Stored with the page they belong to, so another page's result is never shown.
+  const [result, setResult] = useState<{ page: number; slots: Slot[] } | null>(null);
   useEffect(() => {
     if (!enabled) return;
     let live = true;
     Promise.all([getSlots(page), getTextRuns(page)]).then(
       ([found, runs]) => {
-        if (live) setSlots(usableSlots(found, runs, objects, page));
+        if (live) setResult({ page, slots: usableSlots(found, runs, objects, page) });
       },
       () => {
-        if (live) setSlots([]);
+        if (live) setResult({ page, slots: [] });
       },
     );
     return () => {
       live = false;
     };
   }, [enabled, page, version, docId, objects, getSlots, getTextRuns]);
-  return enabled ? slots : null;
+  return enabled && result?.page === page ? result.slots : null;
 }
