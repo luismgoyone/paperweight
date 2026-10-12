@@ -93,6 +93,7 @@ export function createEngineClient(): EngineClient {
     registerDocument: (key, bytes, password) =>
       call(() => remote.registerDocument(key, bytes, password) as Promise<RegisterResult>),
     extract: (pages) => call(() => remote.extract(pages)),
+    retainDocuments: (keys) => call(() => remote.retainDocuments(keys)),
     terminate: () => {
       crashed = true;
       remote[Comlink.releaseProxy]();

@@ -14,7 +14,7 @@ import type { RegisterResult } from './documents';
 /** The engine's Comlink surface (spec §3.2). Implemented in worker.ts. */
 export interface EngineApi {
   open(bytes: Uint8Array, password?: string): Promise<OpenResult>;
-  setOps(ops: Op[]): Promise<{ changedPages: ChangedPages; pages: PageInfo[] }>;
+  setOps(ops: Op[]): Promise<{ changedPages: ChangedPages; pages: PageInfo[]; hasForm: boolean }>;
   render(page: number, scale: number): Promise<ImageBitmap>;
   search(needle: string): Promise<SearchHit[]>;
   textRuns(page: number): Promise<TextRun[]>;
@@ -26,6 +26,8 @@ export interface EngineApi {
   registerImage(key: string, bytes: Uint8Array): Promise<{ width: number; height: number }>;
   /** Makes another PDF available to `page.insertFrom` under `key`. */
   registerDocument(key: string, bytes: Uint8Array, password?: string): Promise<RegisterResult>;
+  /** Forgets registered documents except these keys. */
+  retainDocuments(keys: string[]): Promise<void>;
   /** A new PDF of these pages of the current document (extract / split). */
   extract(pages: number[]): Promise<Uint8Array>;
   /** Forgets registered images except these keys. */

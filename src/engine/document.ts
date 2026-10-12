@@ -1,6 +1,7 @@
 import * as mupdf from 'mupdf';
 import { DESTRUCTIVE_KINDS, type Op, type OpenResult, type PageInfo } from '../shared/types';
 import { ENGINE_BROKEN } from './api';
+import { graftPages } from './graft';
 import { applyOp, pagesTouched } from './ops';
 
 const PDF_MIME = 'application/pdf';
@@ -76,12 +77,11 @@ export class EngineSession {
     this.current = doc;
     this.password = password;
     this.checkpoints.set(0, bytes);
-    const fields = doc.getTrailer().get('Root', 'AcroForm', 'Fields');
     return {
       status: 'ok',
       pages: this.pageInfo(),
       repaired: doc.wasRepaired(),
-      hasForm: fields.isArray() && fields.length > 0,
+      hasForm: this.hasForm(),
     };
   }
 
@@ -161,6 +161,36 @@ export class EngineSession {
     }
     this.current?.destroy();
     this.current = doc;
+  }
+
+  /** Whether the document has fillable form fields (pages may bring some in). */
+  hasForm(): boolean {
+    const fields = this.doc.getTrailer().get('Root', 'AcroForm', 'Fields');
+    return fields.isArray() && fields.length > 0;
+  }
+
+  /**
+   * A new PDF of `pages` (extract / split). A password-protected document's extracts are
+   * protected with the same password (AES-256), so extracting doesn't silently drop it.
+   */
+  extract(pages: number[]): Uint8Array {
+    const out = new mupdf.PDFDocument();
+    try {
+      graftPages(out, 0, this.doc, pages);
+      const pw = this.password;
+      if (pw !== undefined && /[,=]/.test(pw)) {
+        throw new Error(
+          "This file's password contains a comma or '=', so extracted pages can't keep it.",
+        );
+      }
+      const options =
+        pw === undefined
+          ? 'garbage,compress'
+          : `garbage,compress,encrypt=aes-256,user-password=${pw},owner-password=${pw}`;
+      return toBytes(out.saveToBuffer(options));
+    } finally {
+      out.destroy();
+    }
   }
 
   pageInfo(): PageInfo[] {

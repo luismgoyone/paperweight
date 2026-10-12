@@ -1,7 +1,7 @@
 import type * as mupdf from 'mupdf';
 import type { Op } from '../../shared/types';
 import { getDocument } from '../documents';
-import { graftPageWithAnnots } from '../graft';
+import { graftPages } from '../graft';
 
 type PageOp = Extract<Op, { kind: `page.${string}` }>;
 
@@ -60,9 +60,7 @@ export function applyPageOp(doc: mupdf.PDFDocument, op: PageOp): void {
       if (op.at < 0 || op.at > count) throw new Error('Invalid position');
       const source = getDocument(op.source);
       checkIndices(op.pages, source.countPages());
-      // One graft map so pages that share fonts/images share them in our document too.
-      const map = doc.newGraftMap();
-      op.pages.forEach((p, i) => graftPageWithAnnots(doc, map, op.at + i, source, p));
+      graftPages(doc, op.at, source, op.pages);
       return;
     }
   }

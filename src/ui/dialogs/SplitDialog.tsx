@@ -26,6 +26,8 @@ export function SplitDialog({ pageCount, onClose }: { pageCount: number; onClose
     try {
       await split(result.ranges);
       onClose();
+    } catch {
+      // The store already showed what went wrong; keep the dialog open to retry.
     } finally {
       setBusy(false);
     }

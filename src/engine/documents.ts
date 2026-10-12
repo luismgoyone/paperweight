@@ -22,12 +22,31 @@ export function registerDocument(
   }
   if (!doc) return { status: 'error', message: 'This file is not a PDF.' };
   if (doc.needsPassword()) {
-    if (password === undefined) return { status: 'needs-password' };
-    if (doc.authenticatePassword(password) === 0) return { status: 'wrong-password' };
+    if (password === undefined || doc.authenticatePassword(password) === 0) {
+      doc.destroy();
+      return { status: password === undefined ? 'needs-password' : 'wrong-password' };
+    }
+  }
+  try {
+    // Parse the page tree now so a damaged file fails here, not in the middle of an op.
+    doc.countPages();
+  } catch (e) {
+    doc.destroy();
+    return { status: 'error', message: e instanceof Error ? e.message : String(e) };
   }
   registry.get(key)?.destroy();
   registry.set(key, doc);
   return { status: 'ok', pageCount: doc.countPages() };
+}
+
+/** Forgets every registered document except `keep` (called when another document is opened). */
+export function retainDocuments(keep: readonly string[]): void {
+  for (const [key, doc] of registry) {
+    if (!keep.includes(key)) {
+      doc.destroy();
+      registry.delete(key);
+    }
+  }
 }
 
 export function getDocument(key: string): mupdf.PDFDocument {

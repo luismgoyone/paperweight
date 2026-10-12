@@ -2,8 +2,7 @@
 import * as Comlink from 'comlink';
 import { E2E_CRASH, ENGINE_READY, type EngineApi } from './api';
 import { EngineSession } from './document';
-import { registerDocument } from './documents';
-import { extractPages } from './export';
+import { registerDocument, retainDocuments } from './documents';
 import { registerFont } from './fonts';
 import { listFields } from './forms';
 import { imageSize, registerImage, retainImages } from './images';
@@ -18,7 +17,7 @@ const api: EngineApi = {
   },
   async setOps(ops) {
     const { changedPages } = session.setOps(ops);
-    return { changedPages, pages: session.pageInfo() };
+    return { changedPages, pages: session.pageInfo(), hasForm: session.hasForm() };
   },
   async render(page, scale) {
     const { width, height, pixels } = renderPageRGBA(session.doc, page, scale);
@@ -53,8 +52,11 @@ const api: EngineApi = {
   async registerDocument(key, bytes, password) {
     return registerDocument(key, bytes, password);
   },
+  async retainDocuments(keys) {
+    retainDocuments(keys);
+  },
   async extract(pages) {
-    const bytes = extractPages(session.doc, pages);
+    const bytes = session.extract(pages);
     return Comlink.transfer(bytes, [bytes.buffer]);
   },
   async retainImages(keys) {

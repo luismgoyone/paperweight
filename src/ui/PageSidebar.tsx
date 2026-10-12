@@ -153,19 +153,22 @@ export function PageSidebar() {
   const pages = useEditor((s) => s.pages);
   const pageVersions = useEditor((s) => s.pageVersions);
   const docId = useEditor((s) => s.docId);
+  const revision = useEditor((s) => s.revision);
   const currentPage = useEditor((s) => s.currentPage);
   const goToPage = useEditor((s) => s.goToPage);
   const commit = useEditor((s) => s.commit);
   const insertDocument = useEditor((s) => s.insertDocument);
   const extractPages = useEditor((s) => s.extractPages);
+  // A selection is only valid for the op-log revision it was made at: undo, redo or any edit
+  // can move pages, so the same indices may no longer mean the same pages.
   const [selection, setSelection] = useState<{
     docId: number;
-    count: number;
+    revision: number;
     pages: number[];
     anchor: number;
   }>({
     docId,
-    count: pages.length,
+    revision,
     pages: [],
     anchor: 0,
   });
@@ -176,11 +179,11 @@ export function PageSidebar() {
 
   // Selection belongs to one version of the page list.
   const selected =
-    selection.docId === docId && selection.count === pages.length ? selection.pages : [];
+    selection.docId === docId && selection.revision === revision ? selection.pages : [];
   const targets = selected.length ? selected : [currentPage];
   const insertAt = Math.max(...targets) + 1;
   const select = (pagesSel: number[], anchor: number) =>
-    setSelection({ docId, count: pages.length, pages: pagesSel, anchor });
+    setSelection({ docId, revision: useEditor.getState().revision, pages: pagesSel, anchor });
 
   const dropIndexAt = (clientY: number): number => {
     const items = [...(list.current?.querySelectorAll<HTMLElement>('[data-thumb]') ?? [])];
@@ -226,9 +229,9 @@ export function PageSidebar() {
     const moving = selected.includes(drag.from) ? selected : [drag.from];
     const order = drag.drop === null ? null : moveOrder(pages.length, moving, drag.drop);
     if (order) {
-      void commit({ kind: 'page.move', order });
       const moved = moving.map((p) => order.indexOf(p));
-      select(moved, moved[0]!);
+      // Keep the moved pages selected (at the revision the move creates).
+      void commit({ kind: 'page.move', order }).then(() => select(moved, moved[0]!));
     }
   };
 
@@ -238,10 +241,11 @@ export function PageSidebar() {
     if (drop < 0 || drop > pages.length) return;
     const order = moveOrder(pages.length, sorted, drop);
     if (!order) return;
-    void commit({ kind: 'page.move', order });
     const moved = sorted.map((p) => order.indexOf(p));
-    select(moved, moved[0]!);
-    goToPage(moved[0]!);
+    void commit({ kind: 'page.move', order }).then(() => {
+      select(moved, moved[0]!);
+      goToPage(moved[0]!);
+    });
   };
 
   // Alt+↑/↓ moves the selected pages. Listen on the window: Safari doesn't focus a thumbnail
@@ -255,9 +259,11 @@ export function PageSidebar() {
       if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
       if (
         e.target instanceof HTMLElement &&
-        e.target.closest('input, textarea, select, [contenteditable=true]')
-      )
+        e.target.closest('input, textarea, select, [contenteditable]:not([contenteditable=false])')
+      ) {
         return;
+      }
+      if (document.querySelector('[aria-modal="true"]')) return; // a dialog is open
       e.preventDefault();
       moveByRef.current(e.key === 'ArrowUp' ? -1 : 1);
     };

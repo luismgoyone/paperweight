@@ -57,6 +57,8 @@ export type EditorState = {
   canRedo: boolean;
   dirty: boolean;
   search: SearchState;
+  /** Increases whenever the op log changes (edits, undo, redo); keys page-indexed UI state. */
+  revision: number;
   /** Objects added by the user (annotations, text), in drawing order. Derived from the op log. */
   objects: EditorObject[];
   toast: string | null;
@@ -126,6 +128,7 @@ const images = new Map<string, Uint8Array>();
 const documents = new Map<string, { bytes: Uint8Array; password?: string }>();
 // A PDF being inserted that is waiting for its password.
 let pendingInsert: { key: string; bytes: Uint8Array; file: File; at: number } | null = null;
+let inserting = false;
 /** Resolves when the current engine has every bundled font (text ops need them). */
 let fontsRegistered: Promise<void> = Promise.resolve();
 // History changes and the engine sync that follows them run one at a time, so a failed op
@@ -147,9 +150,19 @@ function saveFile(bytes: Uint8Array, name: string): void {
 
 const baseName = (name: string) =>
   name
+
     .trim()
     .replace(/\.pdf$/i, '')
     .trim() || 'document';
+
+/** "3", "2-5" for a contiguous run, otherwise "1_4_7" (so "1-5" never means pages 1 and 5). */
+function pageLabel(sorted: number[]): string {
+  const first = sorted[0]! + 1;
+  const last = sorted[sorted.length - 1]! + 1;
+  if (sorted.length === 1) return `${first}`;
+  const contiguous = sorted.every((p, i) => i === 0 || p === sorted[i - 1]! + 1);
+  return contiguous ? `${first}-${last}` : sorted.map((p) => p + 1).join('_');
+}
 
 function engineOrThrow(): EngineClient {
   if (!engine) throw new Error('The PDF engine is not running');
@@ -168,6 +181,7 @@ export const useEditor = create<EditorState>()((set, get) => {
   };
 
   const historyFlags = () => ({
+    revision: get().revision + 1,
     canUndo: history.canUndo,
     canRedo: history.canRedo,
     dirty: history.dirty,
@@ -185,14 +199,51 @@ export const useEditor = create<EditorState>()((set, get) => {
   };
 
   const sync = async () => {
-    const { changedPages, pages } = await engineOrThrow().setOps(history.active);
+    const { changedPages, pages, hasForm } = await engineOrThrow().setOps(history.active);
     bumpPages(changedPages, pages);
+    if (hasForm !== get().hasForm) set({ hasForm });
     set(historyFlags());
   };
 
   const registerFonts = async (client: EngineClient) => {
     const fonts = await loadFonts();
     await Promise.all([...fonts].map(([id, bytes]) => client.registerFont(id, bytes)));
+  };
+
+  /** Registers a PDF to insert (asking for its password if needed) and inserts all its pages. */
+  const insertOne = async (file: File, at: number, password?: string) => {
+    // Reuse the bytes only when retrying the same file with a password.
+    const retry = pendingInsert && pendingInsert.file === file ? pendingInsert : null;
+    const key = retry?.key ?? newId();
+    const bytes = retry?.bytes ?? new Uint8Array(await file.arrayBuffer());
+    const result = await engineOrThrow().registerDocument(key, bytes, password);
+    switch (result.status) {
+      case 'ok':
+        pendingInsert = null;
+        set({ insertPassword: null });
+        documents.set(key, { bytes, password });
+        await get().commit({
+          kind: 'page.insertFrom',
+          at,
+          source: key,
+          pages: Array.from({ length: result.pageCount }, (_, i) => i),
+        });
+        get().showToast(
+          `Inserted ${result.pageCount} page${result.pageCount === 1 ? '' : 's'} from "${file.name}".`,
+        );
+        return;
+      case 'needs-password':
+      case 'wrong-password':
+        pendingInsert = { key, bytes, file, at };
+        set({
+          insertPassword: { fileName: file.name, wrong: result.status === 'wrong-password' },
+        });
+        return;
+      case 'error':
+        pendingInsert = null;
+        set({ insertPassword: null });
+        get().showToast(`"${file.name}" could not be opened as a PDF. (${result.message})`);
+    }
   };
 
   const startEngine = () => {
@@ -268,6 +319,9 @@ export const useEditor = create<EditorState>()((set, get) => {
           const keep = useTools.getState().signatures.map((s) => s.key);
           for (const key of images.keys()) if (!keep.includes(key)) images.delete(key);
           void engineOrThrow().retainImages(keep);
+          // PDFs inserted into the previous document aren't needed any more.
+          documents.clear();
+          void engineOrThrow().retainDocuments([]);
         }
         set({
           status: 'ready',
@@ -326,6 +380,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     dirty: false,
     search: EMPTY_SEARCH,
     objects: [],
+    revision: 0,
     toast: null,
 
     initEngine() {
@@ -376,35 +431,17 @@ export const useEditor = create<EditorState>()((set, get) => {
     },
 
     async insertDocument(file, at, password) {
-      const key = pendingInsert?.key ?? newId();
-      const bytes = pendingInsert?.bytes ?? new Uint8Array(await file.arrayBuffer());
-      const result = await engineOrThrow().registerDocument(key, bytes, password);
-      switch (result.status) {
-        case 'ok':
-          pendingInsert = null;
-          set({ insertPassword: null });
-          documents.set(key, { bytes, password });
-          await get().commit({
-            kind: 'page.insertFrom',
-            at,
-            source: key,
-            pages: Array.from({ length: result.pageCount }, (_, i) => i),
-          });
-          get().showToast(
-            `Inserted ${result.pageCount} page${result.pageCount === 1 ? '' : 's'} from "${file.name}".`,
-          );
-          return;
-        case 'needs-password':
-        case 'wrong-password':
-          pendingInsert = { key, bytes, file, at };
-          set({
-            insertPassword: { fileName: file.name, wrong: result.status === 'wrong-password' },
-          });
-          return;
-        case 'error':
-          pendingInsert = null;
-          set({ insertPassword: null });
-          get().showToast(`"${file.name}" could not be opened as a PDF. (${result.message})`);
+      // One insert at a time: a second Enter in the password dialog must not insert twice.
+      if (inserting) return;
+      inserting = true;
+      try {
+        await insertOne(file, at, password);
+      } catch (e) {
+        pendingInsert = null;
+        set({ insertPassword: null });
+        get().showToast(`The pages could not be inserted: ${messageOf(e)}`);
+      } finally {
+        inserting = false;
       }
     },
 
@@ -420,20 +457,25 @@ export const useEditor = create<EditorState>()((set, get) => {
     async extractPages(pages) {
       if (!pages.length) return;
       const sorted = [...pages].sort((a, b) => a - b);
-      const bytes = await engineOrThrow().extract(sorted);
-      const label =
-        sorted.length === 1
-          ? `${sorted[0]! + 1}`
-          : `${sorted[0]! + 1}-${sorted[sorted.length - 1]! + 1}`;
-      saveFile(bytes, `${baseName(get().fileName)}-pages-${label}.pdf`);
+      try {
+        const bytes = await engineOrThrow().extract(sorted);
+        saveFile(bytes, `${baseName(get().fileName)}-pages-${pageLabel(sorted)}.pdf`);
+      } catch (e) {
+        get().showToast(`The pages could not be extracted: ${messageOf(e)}`);
+      }
     },
 
     async split(ranges) {
-      for (const [first, last] of ranges) {
-        const bytes = await engineOrThrow().extract(range(first, last));
-        saveFile(bytes, `${baseName(get().fileName)}-pages-${first + 1}-${last + 1}.pdf`);
-        // Some browsers drop downloads triggered too quickly in a row.
-        await new Promise((r) => setTimeout(r, 300));
+      try {
+        for (const [first, last] of ranges) {
+          const bytes = await engineOrThrow().extract(range(first, last));
+          saveFile(bytes, `${baseName(get().fileName)}-pages-${first + 1}-${last + 1}.pdf`);
+          // Some browsers drop downloads triggered too quickly in a row.
+          await new Promise((r) => setTimeout(r, 300));
+        }
+      } catch (e) {
+        get().showToast(`The document could not be split: ${messageOf(e)}`);
+        throw e;
       }
     },
 
