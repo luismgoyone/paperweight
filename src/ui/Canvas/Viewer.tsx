@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useEditor } from '../../editor/store';
 import { PAGE_GAP, pageAtOffset, pageOffsets, visibleRange } from '../../editor/visible';
+import { Overlay } from './Overlay';
 import { PageView } from './PageView';
 
 /** The scrolling page stack. Only visible pages ±1 mount a canvas (spec §3.4). */
@@ -117,7 +118,10 @@ export function Viewer() {
               style={{ top: offsets[i], left, width, height: page.height * zoom }}
             >
               {i >= first && i <= last && (
-                <PageView page={page} zoom={zoom} version={pageVersions[i] ?? 0} docId={docId} />
+                <>
+                  <PageView page={page} zoom={zoom} version={pageVersions[i] ?? 0} docId={docId} />
+                  <Overlay page={page} zoom={zoom} />
+                </>
               )}
             </div>
           );

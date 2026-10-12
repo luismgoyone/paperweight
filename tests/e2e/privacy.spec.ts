@@ -7,7 +7,7 @@ test('no network after load, no third-party hosts, nothing stored', async ({
   context,
   baseURL,
 }) => {
-  const origin = new URL(baseURL!).origin;
+  const appOrigin = new URL(baseURL!).origin;
   const requests: { url: string; phase: 'load' | 'after' }[] = [];
   let phase: 'load' | 'after' = 'load';
   const isLocalScheme = (url: string) => url.startsWith('blob:') || url.startsWith('data:');
@@ -34,6 +34,23 @@ test('no network after load, no third-party hosts, nothing stored', async ({
       title: 'x',
     }),
   );
+  // Phase 2 editing: a highlight, a rectangle and added text.
+  await page.getByLabel('Zoom', { exact: true }).selectOption('1');
+  const origin = (await page.locator('[data-page="1"]').boundingBox())!;
+  await page.getByRole('button', { name: 'Highlight' }).click();
+  await page.mouse.move(origin.x + 70, origin.y + 130);
+  await page.mouse.down();
+  await page.mouse.move(origin.x + 300, origin.y + 130, { steps: 5 });
+  await page.mouse.up();
+  await page.getByRole('button', { name: 'Rectangle' }).click();
+  await page.mouse.move(origin.x + 100, origin.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(origin.x + 200, origin.y + 360, { steps: 5 });
+  await page.mouse.up();
+  await page.getByRole('button', { name: 'Add text' }).click();
+  await page.mouse.click(origin.x + 100, origin.y + 500);
+  await page.keyboard.type('Private note');
+  await page.keyboard.press('ControlOrMeta+Enter');
   await page.getByLabel('Search').fill('needle');
   await page.getByLabel('Search').press('Enter');
   await expect(page.getByTestId('search-summary')).toHaveText('1 of 2');
@@ -44,7 +61,7 @@ test('no network after load, no third-party hosts, nothing stored', async ({
   // Let any stray async request surface before asserting.
   await page.waitForTimeout(500);
 
-  const foreign = requests.filter((r) => !r.url.startsWith(origin) && !isLocalScheme(r.url));
+  const foreign = requests.filter((r) => !r.url.startsWith(appOrigin) && !isLocalScheme(r.url));
   expect(foreign, 'requests to non-origin hosts').toEqual([]);
   const afterLoad = requests.filter((r) => r.phase === 'after' && !isLocalScheme(r.url));
   expect(afterLoad, 'requests after the initial load').toEqual([]);

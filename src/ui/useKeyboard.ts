@@ -1,8 +1,18 @@
 import { useEffect } from 'react';
+import { translate } from '../editor/objects';
 import { useEditor } from '../editor/store';
+import { TOOL_SHORTCUTS, useTools } from '../editor/tools';
 import { zoomIn, zoomOut } from '../editor/zoom';
+import { annotOpFor } from './Canvas/Overlay';
 
-/** Global shortcuts (spec §5). Tool shortcuts arrive with their tools in later phases. */
+const NUDGE: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
+
+/** Global shortcuts (spec §5). */
 export function useKeyboard(focusSearch: () => void) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -33,6 +43,25 @@ export function useKeyboard(focusSearch: () => void) {
       } else if (mod && key === 'y') {
         e.preventDefault();
         void s.redo();
+      } else if (!mod && !e.altKey && TOOL_SHORTCUTS[key]) {
+        useTools.getState().setTool(TOOL_SHORTCUTS[key]!);
+      } else if (e.key === 'Escape') {
+        const tools = useTools.getState();
+        if (tools.selectedId) tools.select(null);
+        else tools.setTool('select');
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        const selected = s.objects.find((o) => o.id === useTools.getState().selectedId);
+        if (!selected) return;
+        e.preventDefault();
+        useTools.getState().select(null);
+        void s.commit(annotOpFor(selected, 'delete'));
+      } else if (NUDGE[e.key]) {
+        const selected = s.objects.find((o) => o.id === useTools.getState().selectedId);
+        if (!selected) return;
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        const [dx, dy] = NUDGE[e.key]!;
+        void s.commit(annotOpFor(translate(selected, dx * step, dy * step), 'update'));
       } else if (e.key === 'PageDown') {
         e.preventDefault();
         s.goToPage(s.currentPage + 1);

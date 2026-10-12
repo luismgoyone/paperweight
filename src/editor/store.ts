@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { editedFileName } from '../shared/filename';
-import type { Op, PageInfo, SearchHit } from '../shared/types';
+import type { Op, PageInfo, Point, Quad, SearchHit, TextRun } from '../shared/types';
 import { createEngineClient, createSerialQueue, type EngineClient } from './engine-client';
 import { loadFonts } from './fonts';
 import { History } from './history';
+import { foldObjects, type EditorObject } from './objects';
 import { clampZoom, fitPage, fitWidth, type ZoomMode } from './zoom';
 
 export const LARGE_FILE_BYTES = 200 * 1024 * 1024;
@@ -41,6 +42,8 @@ export type EditorState = {
   canRedo: boolean;
   dirty: boolean;
   search: SearchState;
+  /** Objects added by the user (annotations, text), in drawing order. Derived from the op log. */
+  objects: EditorObject[];
   toast: string | null;
 
   initEngine(): void;
@@ -50,7 +53,10 @@ export type EditorState = {
   commit(op: Op): Promise<void>;
   undo(): Promise<void>;
   redo(): Promise<void>;
-  download(): Promise<void>;
+  download(options?: { flatten?: boolean }): Promise<void>;
+  /** Existing text on a page (cached per page version). */
+  getTextRuns(page: number): Promise<TextRun[]>;
+  selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
   setZoom(zoom: number): void;
   setZoomMode(mode: ZoomMode): void;
   applyFit(viewportW: number, viewportH: number): void;
@@ -97,7 +103,10 @@ export const useEditor = create<EditorState>()((set, get) => {
     canUndo: history.canUndo,
     canRedo: history.canRedo,
     dirty: history.dirty,
+    objects: [...foldObjects(history.active).values()],
   });
+
+  const textRunCache = new Map<string, Promise<TextRun[]>>();
 
   const bumpPages = (changed: number[] | 'all', pages = get().pages) => {
     const prev = get().pageVersions;
@@ -234,6 +243,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     canRedo: false,
     dirty: false,
     search: EMPTY_SEARCH,
+    objects: [],
     toast: null,
 
     initEngine() {
@@ -309,12 +319,12 @@ export const useEditor = create<EditorState>()((set, get) => {
       });
     },
 
-    download() {
+    download(options = {}) {
       return exclusive(async () => {
         if (!source) return;
         let bytes: Uint8Array;
         try {
-          bytes = await engineOrThrow().save();
+          bytes = await engineOrThrow().save(options);
         } catch (e) {
           get().showToast(`The PDF could not be saved: ${messageOf(e)}`);
           return;
@@ -405,6 +415,22 @@ export const useEditor = create<EditorState>()((set, get) => {
 
     dismissToast() {
       set({ toast: null });
+    },
+
+    getTextRuns(page) {
+      const key = `${get().docId}:${page}:${get().pageVersions[page] ?? 0}`;
+      let runs = textRunCache.get(key);
+      if (!runs) {
+        if (textRunCache.size > 200) textRunCache.clear();
+        runs = engineOrThrow().textRuns(page);
+        runs.catch(() => textRunCache.delete(key));
+        textRunCache.set(key, runs);
+      }
+      return runs;
+    },
+
+    selectText(page, a, b) {
+      return engineOrThrow().selectText(page, a, b);
     },
 
     render(page, scale, signal) {

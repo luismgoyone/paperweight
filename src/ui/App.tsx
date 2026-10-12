@@ -6,6 +6,7 @@ import { PageSidebar } from './PageSidebar';
 import { PropertiesPanel } from './PropertiesPanel';
 import { PasswordDialog } from './dialogs/PasswordDialog';
 import { Toast } from './Toast';
+import { Toolbar } from './Toolbar';
 import { TopBar } from './TopBar';
 import { useKeyboard } from './useKeyboard';
 
@@ -87,6 +88,7 @@ export function App() {
         }}
       />
       <TopBar searchInput={searchInput} />
+      {showViewer && <Toolbar />}
       <main className="flex min-h-0 flex-1">
         {showViewer ? (
           <>
