@@ -3,6 +3,7 @@ import { editedFileName } from '../shared/filename';
 import { range, type PageRange } from '../shared/ranges';
 import type {
   FormField,
+  Slot,
   ImageAsset,
   Op,
   PageInfo,
@@ -74,6 +75,8 @@ export type EditorState = {
   cancelPassword(): void;
   /** Applies an op; resolves false if it was rejected (the user has been told why). */
   commit(op: Op): Promise<boolean>;
+  /** Resolves once every edit already started has been applied. */
+  settled(): Promise<void>;
   /**
    * Changes an added object based on its latest committed state (`fn` returns the new object,
    * or null to delete it). Runs in order with other edits, so quick successive changes can't
@@ -85,6 +88,8 @@ export type EditorState = {
   download(options?: SaveOptions): Promise<void>;
   /** Existing text on a page (cached per page version). */
   getTextRuns(page: number): Promise<TextRun[]>;
+  /** Blank boxes and checkboxes detected on a page of a flat form. */
+  getSlots(page: number): Promise<Slot[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
   /** Which font an edited text object uses (null for added text). */
   getTextEditInfo(id: string): Promise<TextEditInfo | null>;
@@ -223,6 +228,7 @@ export const useEditor = create<EditorState>()((set, get) => {
   });
 
   const textRunCache = new Map<string, Promise<TextRun[]>>();
+  const slotCache = new Map<string, Promise<Slot[]>>();
 
   const bumpPages = (changed: number[] | 'all', pages = get().pages) => {
     const prev = get().pageVersions;
@@ -453,6 +459,10 @@ export const useEditor = create<EditorState>()((set, get) => {
     cancelPassword() {
       pending = null;
       set({ status: source ? 'ready' : 'empty', passwordError: false });
+    },
+
+    settled() {
+      return exclusive(async () => undefined);
     },
 
     async commit(op) {
@@ -776,6 +786,18 @@ export const useEditor = create<EditorState>()((set, get) => {
 
     dismissToast() {
       set({ toast: null });
+    },
+
+    getSlots(page) {
+      const key = `${get().docId}:${page}:${get().pageVersions[page] ?? 0}`;
+      let slots = slotCache.get(key);
+      if (!slots) {
+        if (slotCache.size > 200) slotCache.clear();
+        slots = engineOrThrow().formSlots(page);
+        slots.catch(() => slotCache.delete(key));
+        slotCache.set(key, slots);
+      }
+      return slots;
     },
 
     getTextRuns(page) {

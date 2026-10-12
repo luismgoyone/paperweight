@@ -105,8 +105,12 @@ export function TextEditor({ draft, zoom, measure, onCommit }: Props) {
         if (e.key === 'Escape') {
           e.preventDefault();
           finish(true);
-        } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || draft.edit)) {
-          // Edits of existing text are single-line (spec §4: no reflow), so Enter commits.
+        } else if (
+          e.key === 'Enter' &&
+          (e.metaKey || e.ctrlKey || draft.edit || draft.singleLine)
+        ) {
+          // Edits of existing text are single-line (spec §4: no reflow), as are form boxes,
+          // so Enter commits.
           e.preventDefault();
           finish();
         }

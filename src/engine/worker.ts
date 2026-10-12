@@ -9,6 +9,7 @@ import { registerFont } from './fonts';
 import { listFields } from './forms';
 import { imageSize, registerImage, retainImages } from './images';
 import { renderPageRGBA, searchDocument } from './render';
+import { findSlots } from './slots';
 import { hasImages, selectText, textRuns } from './text';
 
 const session = new EngineSession();
@@ -46,6 +47,9 @@ const api: EngineApi = {
   },
   async textRuns(page) {
     return textRuns(session.doc, page);
+  },
+  async formSlots(page) {
+    return findSlots(session.doc, page);
   },
   async selectText(page, a, b) {
     return selectText(session.doc, page, a, b);

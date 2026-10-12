@@ -50,6 +50,6 @@ test('Form fill on a PDF without fillable fields says so and points to Add text'
 }) => {
   // simple.pdf has no form fields, like a form that was printed or re-saved to PDF.
   await page.getByRole('button', { name: 'Form fill' }).click();
-  await expect(page.getByRole('status')).toContainText('no fillable form fields');
-  await expect(page.getByRole('status')).toContainText('Add text');
+  await expect(page.getByRole('note')).toContainText('No boxes were found on this page');
+  await expect(page.getByRole('note')).toContainText('Add text');
 });

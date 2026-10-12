@@ -7,6 +7,7 @@ import type {
   Point,
   Quad,
   SearchHit,
+  Slot,
   TextRun,
 } from '../shared/types';
 import type { ChangedPages, SaveOptions } from './document';
@@ -20,6 +21,8 @@ export interface EngineApi {
   render(page: number, scale: number): Promise<ImageBitmap>;
   search(needle: string): Promise<SearchHit[]>;
   textRuns(page: number): Promise<TextRun[]>;
+  /** Blank boxes and checkboxes on a page of a flat form (no form fields). */
+  formSlots(page: number): Promise<Slot[]>;
   hasImages(page: number): Promise<boolean>;
   /** A structured, best-effort reading of the pages for Word export (spec §6 Phase 8). */
   documentModel(): Promise<DocPage[]>;
