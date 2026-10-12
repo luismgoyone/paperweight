@@ -10,7 +10,9 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "e2e": "playwright test",
-    "fixtures": "node scripts/make-fixtures.mjs"
+    "fixtures": "node scripts/make-fixtures.mjs",
+    "predev": "node scripts/copy-ocr-assets.mjs",
+    "prebuild": "node scripts/copy-ocr-assets.mjs"
   },
   "license": "AGPL-3.0-or-later",
   "description": "Browser-only, privacy-first PDF editor. Files never leave your device.",
@@ -19,6 +21,7 @@
     "mupdf": "^1.28.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tesseract.js": "^7.0.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

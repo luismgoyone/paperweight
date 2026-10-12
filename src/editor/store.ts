@@ -15,6 +15,7 @@ import type {
 import { newId } from './ids';
 import { createEngineClient, createSerialQueue, type EngineClient } from './engine-client';
 import { loadFonts } from './fonts';
+import { recognize } from './ocr';
 import { History } from './history';
 import type { SaveOptions } from '../engine/document';
 import type { TextEditInfo } from '../engine/ops/text-add';
@@ -99,6 +100,10 @@ export type EditorState = {
   compress(dpi: number): Promise<{ bytes: Uint8Array; before: number; after: number }>;
   /** Downloads bytes produced by an export (e.g. compress) under the edited file name. */
   saveExport(bytes: Uint8Array): void;
+  /** OCR in progress: which page and how far (0..1). */
+  ocr: { page: number; progress: number } | null;
+  /** Recognises the text on scanned pages and adds an invisible text layer (spec §6 Phase 7). */
+  recognizePages(pages: number[]): Promise<void>;
   /** Applies every marked redaction (one op per page). */
   applyRedactions(marks: { page: number; rect: Rect }[]): Promise<void>;
   /** Downloads a new PDF made of these pages. */
@@ -386,6 +391,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     hasForm: false,
     insertPassword: null,
     isProtected: false,
+    ocr: null,
     docId: 0,
     pages: [],
     pageVersions: [],
@@ -470,6 +476,31 @@ export const useEditor = create<EditorState>()((set, get) => {
     cancelInsertPassword() {
       pendingInsert = null;
       set({ insertPassword: null });
+    },
+
+    async recognizePages(pages) {
+      const OCR_DPI = 300;
+      const scale = OCR_DPI / 72;
+      try {
+        for (const page of pages) {
+          set({ ocr: { page, progress: 0 } });
+          const bitmap = await engineOrThrow().render(page, scale);
+          const words = await recognize(bitmap, scale, (progress) =>
+            set({ ocr: { page, progress } }),
+          );
+          bitmap.close();
+          if (words.length) await get().commit({ kind: 'ocr.addLayer', id: newId(), page, words });
+        }
+        get().showToast(
+          pages.length === 1
+            ? 'Text recognised. You can now search and select it.'
+            : `Text recognised on ${pages.length} pages.`,
+        );
+      } catch (e) {
+        get().showToast(`Text recognition failed: ${messageOf(e)}`);
+      } finally {
+        set({ ocr: null });
+      }
     },
 
     compress(dpi) {
