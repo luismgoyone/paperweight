@@ -1,4 +1,5 @@
 import type {
+  DocPage,
   FormField,
   Op,
   OpenResult,
@@ -9,20 +10,35 @@ import type {
   TextRun,
 } from '../shared/types';
 import type { ChangedPages, SaveOptions } from './document';
+import type { RegisterResult } from './documents';
+import type { TextEditInfo } from './ops/text-add';
 
 /** The engine's Comlink surface (spec §3.2). Implemented in worker.ts. */
 export interface EngineApi {
   open(bytes: Uint8Array, password?: string): Promise<OpenResult>;
-  setOps(ops: Op[]): Promise<{ changedPages: ChangedPages; pages: PageInfo[] }>;
+  setOps(ops: Op[]): Promise<{ changedPages: ChangedPages; pages: PageInfo[]; hasForm: boolean }>;
   render(page: number, scale: number): Promise<ImageBitmap>;
   search(needle: string): Promise<SearchHit[]>;
   textRuns(page: number): Promise<TextRun[]>;
+  hasImages(page: number): Promise<boolean>;
+  /** A structured, best-effort reading of the pages for Word export (spec §6 Phase 8). */
+  documentModel(): Promise<DocPage[]>;
   fields(page: number): Promise<FormField[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
   save(options?: SaveOptions): Promise<Uint8Array>;
   close(): Promise<void>;
   /** Makes an image available to image ops under `key`; returns its pixel size. Idempotent. */
   registerImage(key: string, bytes: Uint8Array): Promise<{ width: number; height: number }>;
+  /** Makes another PDF available to `page.insertFrom` under `key`. */
+  registerDocument(key: string, bytes: Uint8Array, password?: string): Promise<RegisterResult>;
+  /** Which font an edited text object is drawn in (for the substitution notice, spec §4). */
+  textEditInfo(id: string): Promise<TextEditInfo | null>;
+  /** A smaller copy of the current document (spec §6 Phase 6); the document is unchanged. */
+  compress(options: { dpi: number }): Promise<{ bytes: Uint8Array; before: number; after: number }>;
+  /** Forgets registered documents except these keys. */
+  retainDocuments(keys: string[]): Promise<void>;
+  /** A new PDF of these pages of the current document (extract / split). */
+  extract(pages: number[]): Promise<Uint8Array>;
   /** Forgets registered images except these keys. */
   retainImages(keys: string[]): Promise<void>;
   /** Makes a bundled font available to text ops. Idempotent. */

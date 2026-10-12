@@ -1,6 +1,6 @@
 // Generates the synthetic PDF fixtures in tests/fixtures/ (no real personal data).
 // Run with: npm run fixtures
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import * as mupdf from 'mupdf';
 
 const out = new URL('../tests/fixtures/', import.meta.url);
@@ -61,7 +61,9 @@ write(
 write('corrupt.pdf', new TextEncoder().encode('%PDF-1.7\nthis is not really a pdf\n'));
 
 // A recreated invoice (spec §9): Helvetica, right-aligned amount column, no personal data.
-{
+// `invoice-31.pdf` is the same invoice with the first amount reading "$31": the reference for
+// the success-criterion-1 golden test (editing "$26" -> "$31" must look like this).
+function makeInvoice(firstAmount) {
   const doc = new mupdf.PDFDocument();
   const helv = new mupdf.Font('Helvetica');
   const helvBold = new mupdf.Font('Helvetica-Bold');
@@ -85,7 +87,7 @@ write('corrupt.pdf', new TextEncoder().encode('%PDF-1.7\nthis is not really a pd
   text(helvBold, 'F2', 10, 540, 620, 'Amount', 'right');
   content += '0.6 G 0.5 w 72 612 m 540 612 l S\n';
   const rows = [
-    ['Monthly hosting', '1', '$26', '$26'],
+    ['Monthly hosting', '1', '$26', firstAmount],
     ['Domain renewal', '1', '$14', '$14'],
     ['Support hours', '3', '$40', '$120'],
   ];
@@ -102,8 +104,10 @@ write('corrupt.pdf', new TextEncoder().encode('%PDF-1.7\nthis is not really a pd
   const resources = doc.addObject({ Font: { F1, F2 } });
   doc.insertPage(-1, doc.addPage([0, 0, 612, 792], 0, resources, content));
   doc.setMetaData('info:Title', 'Invoice fixture');
-  write('invoice.pdf', doc.saveToBuffer('garbage,compress').asUint8Array());
+  return doc.saveToBuffer('garbage,compress').asUint8Array();
 }
+write('invoice.pdf', makeInvoice('$26'));
+write('invoice-31.pdf', makeInvoice('$31'));
 
 // Pages whose page space differs from PDF space: rotated, and a MediaBox not at the origin.
 {
@@ -276,4 +280,51 @@ write('corrupt.pdf', new TextEncoder().encode('%PDF-1.7\nthis is not really a pd
       }),
     );
   write('form.pdf', doc.saveToBuffer('garbage,compress').asUint8Array());
+}
+
+// An embedded TrueType font subset to the glyphs it uses (spec §9 "subset-font PDF"): editing
+// in a character the subset lacks must fall back to a bundled font and say so.
+{
+  const doc = new mupdf.PDFDocument();
+  const bytes = readFileSync(
+    new URL('../public/fonts/LiberationSans-Regular.ttf', import.meta.url),
+  );
+  const font = new mupdf.Font('LiberationSans', bytes);
+  const F1 = doc.addFont(font);
+  const hex = (s) =>
+    [...s]
+      .map((c) => font.encodeCharacter(c.codePointAt(0)).toString(16).padStart(4, '0'))
+      .join('');
+  const content = `BT /F1 12 Tf 72 700 Td <${hex('Total $26')}> Tj ET\n`;
+  const resources = doc.addObject({ Font: { F1 } });
+  doc.insertPage(-1, doc.addPage([0, 0, 612, 792], 0, resources, content));
+  doc.subsetFonts();
+  write('subset-font.pdf', doc.saveToBuffer('garbage,compress').asUint8Array());
+}
+
+// A scanned page (spec §9): an image of text with no text layer, for OCR.
+{
+  const src = new mupdf.PDFDocument();
+  const font = src.addSimpleFont(new mupdf.Font('Helvetica'));
+  const lines = ['Scanned invoice', 'Hosting total 26 dollars', 'Thank you'];
+  const content = lines.map((l, i) => `BT /F1 28 Tf 72 ${700 - i * 48} Td (${l}) Tj ET`).join('\n');
+  src.insertPage(
+    -1,
+    src.addPage([0, 0, 612, 792], 0, src.addObject({ Font: { F1: font } }), content),
+  );
+  const pix = src
+    .loadPage(0)
+    .toPixmap(mupdf.Matrix.scale(200 / 72, 200 / 72), mupdf.ColorSpace.DeviceGray, false);
+  const doc = new mupdf.PDFDocument();
+  const img = doc.addImage(new mupdf.Image(pix));
+  doc.insertPage(
+    -1,
+    doc.addPage(
+      [0, 0, 612, 792],
+      0,
+      doc.addObject({ XObject: { Scan: img } }),
+      'q 612 0 0 792 0 0 cm /Scan Do Q',
+    ),
+  );
+  write('scanned.pdf', doc.saveToBuffer('garbage,compress').asUint8Array());
 }

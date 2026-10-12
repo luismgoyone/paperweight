@@ -5,7 +5,7 @@ import { EmptyState } from './EmptyState';
 import { FormBanner } from './FormBanner';
 import { PageSidebar } from './PageSidebar';
 import { PropertiesPanel } from './PropertiesPanel';
-import { PasswordDialog } from './dialogs/PasswordDialog';
+import { InsertPasswordDialog, PasswordDialog } from './dialogs/PasswordDialog';
 import { SignatureDialog } from './dialogs/SignatureDialog';
 import { Toast } from './Toast';
 import { Toolbar } from './Toolbar';
@@ -107,6 +107,7 @@ export function App() {
       </main>
       {status === 'password' && <PasswordDialog />}
       <SignatureDialog />
+      <InsertPasswordDialog />
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-30 m-3 rounded-2xl border-4 border-dashed border-blue-500 bg-blue-500/5" />
       )}

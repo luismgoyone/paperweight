@@ -4,7 +4,11 @@ import { applyAnnotOp } from './annotations';
 import { applyFormSet } from '../forms';
 import { applyImageOp } from './images';
 import { applySetTitle } from './meta';
+import { applyOcrOp } from './ocr';
+import { applyPageOp } from './pages';
+import { applyRedactOp } from './redact';
 import { applyTextOp } from './text-add';
+import { applyTextEditOp } from './text-edit';
 
 /** An op could not be applied; the document stays at its prior state (spec §7). */
 export class OpError extends Error {
@@ -30,12 +34,24 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
       case 'text.update':
       case 'text.delete':
         return applyTextOp(doc, op);
+      case 'text.edit':
+        return applyTextEditOp(doc, op);
       case 'image.add':
       case 'image.update':
       case 'image.delete':
         return applyImageOp(doc, op);
       case 'form.set':
         return applyFormSet(doc, op);
+      case 'page.move':
+      case 'page.rotate':
+      case 'page.delete':
+      case 'page.insertBlank':
+      case 'page.insertFrom':
+        return applyPageOp(doc, op);
+      case 'redact':
+        return applyRedactOp(doc, op);
+      case 'ocr.addLayer':
+        return applyOcrOp(doc, op);
       default:
         throw new Error(`Unknown operation "${(op as { kind: string }).kind}"`);
     }
@@ -49,5 +65,6 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
 /** Pages whose rendering an op changes, or 'all' when the op isn't tied to one page. */
 export function pagesTouched(op: Op): number[] | 'all' {
   if ('page' in op) return [op.page];
-  return op.kind === 'form.set' ? 'all' : [];
+  if (op.kind === 'redact') return op.areas.map((a) => a.page);
+  return op.kind === 'form.set' || op.kind.startsWith('page.') ? 'all' : [];
 }
