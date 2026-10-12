@@ -7,7 +7,20 @@ test.beforeEach(async ({ page }) => openApp(page));
 test('shows the empty state with privacy messaging', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Open PDF' })).toBeVisible();
   await expect(page.getByText('Files never leave your device')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Source code' })).toBeVisible();
+  // AGPL §13: the source is offered on the start screen and in the download menu, not the
+  // top bar.
+  await expect(page.getByRole('link', { name: 'Source code (AGPL)' })).toBeVisible();
+  await expect(page.getByRole('banner').getByRole('link', { name: /source/i })).toHaveCount(0);
+});
+
+test('offers the source code from the download menu once a file is open', async ({ page }) => {
+  await openFixture(page, 'simple.pdf');
+  await expect(page.getByRole('banner').getByRole('link', { name: /source/i })).toHaveCount(0);
+  await page.getByRole('button', { name: 'More download options' }).click();
+  await expect(page.getByRole('menuitem', { name: /Source code \(AGPL\)/ })).toHaveAttribute(
+    'href',
+    'https://github.com/luismgoyone/pdf-editor',
+  );
 });
 
 test('opens a PDF from the file picker', async ({ page }) => {
