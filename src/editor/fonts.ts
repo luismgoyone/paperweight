@@ -20,8 +20,10 @@ export function loadFonts(): Promise<Map<string, Uint8Array>> {
       return [fontId(f.family, f), bytes] as const;
     }),
   ).then(async (entries) => {
-    // Signature script fonts: browser only (typed signatures are drawn to an image).
-    await Promise.all(
+    // Signature script fonts: browser only (typed signatures are drawn to an image). Fetched
+    // during startup like the others, but a failure only affects typed signatures, which then
+    // fall back to the browser's cursive font, so it mustn't block the text tool.
+    await Promise.allSettled(
       SCRIPT_FONTS.map(async (f) => {
         const response = await fetch(new URL(f.file, document.baseURI));
         if (!response.ok) throw new Error(`Could not load ${f.file}`);

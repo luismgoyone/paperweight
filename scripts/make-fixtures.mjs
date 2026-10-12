@@ -137,6 +137,7 @@ write('corrupt.pdf', new TextEncoder().encode('%PDF-1.7\nthis is not really a pd
   label(72, 520, 'Plan');
   label(72, 480, 'Country');
   label(72, 440, 'Signature date');
+  label(72, 400, 'Size');
   const pageObj = doc.addPage([0, 0, 612, 792], 0, resources, content);
   doc.insertPage(-1, pageObj);
   const page = doc.findPage(0);
@@ -223,6 +224,41 @@ write('corrupt.pdf', new TextEncoder().encode('%PDF-1.7\nthis is not really a pd
       Rect: box(180, 472, 330, 488),
       DA: doc.newString('/Helv 10 Tf 0 g'),
       V: doc.newString(''),
+    }),
+  );
+
+  // A dropdown whose options have export values different from their labels.
+  const sizes = doc.newArray();
+  [
+    ['S', 'Small'],
+    ['M', 'Medium'],
+    ['L', 'Large'],
+  ].forEach(([value, text]) => {
+    const pair = doc.newArray();
+    pair.push(doc.newString(value));
+    pair.push(doc.newString(text));
+    sizes.push(pair);
+  });
+  fields.push(
+    widget({
+      FT: doc.newName('Ch'),
+      T: doc.newString('size'),
+      Ff: 131072,
+      Opt: sizes,
+      Rect: box(180, 392, 300, 408),
+      DA: doc.newString('/Helv 10 Tf 0 g'),
+      V: doc.newString('S'),
+    }),
+  );
+  // A widget without a name: not fillable, must be ignored.
+  annots.push(
+    doc.addObject({
+      Type: doc.newName('Annot'),
+      Subtype: doc.newName('Widget'),
+      FT: doc.newName('Tx'),
+      F: 4,
+      P: page,
+      Rect: box(400, 392, 500, 408),
     }),
   );
 

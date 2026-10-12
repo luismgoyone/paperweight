@@ -15,6 +15,7 @@ import { createEngineClient, createSerialQueue, type EngineClient } from './engi
 import { loadFonts } from './fonts';
 import { History } from './history';
 import { foldObjects, type EditorObject } from './objects';
+import { useTools } from './tools';
 import { objectOp } from './object-ops';
 import { clampZoom, fitPage, fitWidth, type ZoomMode } from './zoom';
 
@@ -219,6 +220,12 @@ export const useEditor = create<EditorState>()((set, get) => {
         source = { ...file, password };
         pending = null;
         history.reset();
+        {
+          // Images placed in the previous document are no longer needed; session signatures are.
+          const keep = useTools.getState().signatures.map((s) => s.key);
+          for (const key of images.keys()) if (!keep.includes(key)) images.delete(key);
+          void engineOrThrow().retainImages(keep);
+        }
         set({
           status: 'ready',
           fileName: file.name,

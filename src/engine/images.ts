@@ -15,6 +15,12 @@ export function getImageBytes(key: string): Uint8Array {
   return bytes;
 }
 
+/** Drops every registered image except `keep` (called when another document is opened). */
+export function retainImages(keep: readonly string[]): void {
+  const keepSet = new Set(keep);
+  for (const key of registry.keys()) if (!keepSet.has(key)) registry.delete(key);
+}
+
 /** Natural size of an image, for the UI's default placement. */
 export function imageSize(bytes: Uint8Array): { width: number; height: number } {
   const image = new mupdf.Image(bytes);

@@ -36,6 +36,7 @@ describe('listFields', () => {
       ['plan', 'radio'],
       ['plan', 'radio'],
       ['country', 'choice'],
+      ['size', 'choice'],
     ]);
     const notes = fields[1]!;
     expect(notes.multiline).toBe(true);
@@ -47,7 +48,17 @@ describe('listFields', () => {
       'team',
     ]);
     expect(fields[4]!.onState).toBe('Yes');
-    expect(fields[8]!.options).toEqual(['Canada', 'Mexico', 'United States']);
+    expect(fields[8]!.options).toEqual([
+      { label: 'Canada', value: 'Canada' },
+      { label: 'Mexico', value: 'Mexico' },
+      { label: 'United States', value: 'United States' },
+    ]);
+    expect(fields[9]!.options).toEqual([
+      { label: 'Small', value: 'S' },
+      { label: 'Medium', value: 'M' },
+      { label: 'Large', value: 'L' },
+    ]);
+    expect(fields[9]!.value).toBe('S');
   });
 });
 
@@ -92,10 +103,22 @@ describe('form.set', () => {
     expect(value(reopen(s), 'country')).toBe('Mexico');
   });
 
+  it('stores the export value of a dropdown option', () => {
+    const s = session();
+    s.setOps([set('size', 'M')]);
+    const doc = reopen(s);
+    expect(value(doc, 'size')).toBe('M');
+  });
+
+  it('rejects a radio value that no button has', () => {
+    expect(() => session().setOps([set('plan', 'enterprise')])).toThrow(OpError);
+  });
+
   it('rejects read-only and unknown fields without changing anything', () => {
     const s = session();
     expect(() => s.setOps([set('account', 'X')])).toThrow(OpError);
     expect(() => s.setOps([set('nope', 'X')])).toThrow(OpError);
+    expect(() => s.setOps([set('', 'X')])).toThrow(OpError);
     expect(value(s.doc, 'account')).toBe('ACCT-001');
   });
 

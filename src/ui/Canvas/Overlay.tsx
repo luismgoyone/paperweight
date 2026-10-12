@@ -180,6 +180,7 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
   const tool = useTools((s) => s.tool);
   const selectedId = useTools((s) => s.selectedId);
   const draft = useTools((s) => s.draft);
+  const pending = useTools((s) => s.pending);
   const shape = useTools((s) => s.shape);
   const ink = useTools((s) => s.ink);
   const select = useTools((s) => s.select);
@@ -260,6 +261,8 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 || draft) return;
+    // Form mode has no page gestures; let a tap on the page blur (and so commit) a field.
+    if (tool === 'form') return;
     // Keep focus where it is (e.g. a new text editor must not be blurred by this click).
     e.preventDefault();
     const p = toPage(e);
@@ -307,13 +310,21 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
           return;
         }
         const { asset } = pending;
+        // A picked image is placed once: clear it now so a quick double tap can't place it twice.
+        if (pending.kind === 'image') useTools.getState().setPending(null);
         const width =
           pending.kind === 'signature'
             ? SIGNATURE_WIDTH
             : Math.min(MAX_IMAGE_WIDTH, asset.width * 0.75, page.width - 20);
         const height = (width * asset.height) / asset.width;
         const id = newId();
-        const box = { x: p.x - width / 2, y: p.y - height / 2, w: width, h: height };
+        // Centered on the click, kept inside the page.
+        const box = {
+          x: Math.min(Math.max(0, p.x - width / 2), Math.max(0, page.width - width)),
+          y: Math.min(Math.max(0, p.y - height / 2), Math.max(0, page.height - height)),
+          w: width,
+          h: height,
+        };
         void commit({ kind: 'image.add', id, page: page.index, box, image: asset.key }).then(() => {
           // Signatures can be placed again (the picker stays up); a picked image is placed once.
           if (pending.kind === 'image') {
@@ -323,8 +334,6 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         });
         return;
       }
-      case 'form':
-        return;
       case 'note': {
         const id = newId();
         void commit({
@@ -508,8 +517,14 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     <div
       ref={layer}
       data-testid="overlay"
-      className="absolute inset-0 touch-none select-none"
-      style={{ cursor: cursor[tool] }}
+      className="absolute inset-0 select-none"
+      style={{
+        cursor: cursor[tool],
+        // Tools without page gestures leave one-finger scrolling and pinch zoom to the browser
+        // (spec §2: form filling and signing must work on phones).
+        touchAction:
+          tool === 'form' || (tool === 'sign' && !pending) ? 'pan-x pan-y pinch-zoom' : 'none',
+      }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={(e) => void onPointerUp(e)}
@@ -601,7 +616,8 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
                 key={corner}
                 data-testid={`handle-${corner}`}
                 aria-hidden
-                className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 border border-blue-600 bg-white"
+                // 28 px touch target around a 10 px visible handle.
+                className="absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
                 style={{
                   left: x * zoom,
                   top: y * zoom,
@@ -614,7 +630,9 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
                   layer.current!.setPointerCapture(e.pointerId);
                   gesture.current = { kind: 'resize', object: selected, corner, resized: null };
                 }}
-              />
+              >
+                <span className="pointer-events-none h-2.5 w-2.5 border border-blue-600 bg-white" />
+              </div>
             );
           })}
         </>

@@ -128,8 +128,14 @@ export function FormLayer({ page, zoom }: { page: PageInfo; zoom: number }) {
               >
                 <option value="" />
                 {f.options.map((o) => (
-                  <option key={o}>{o}</option>
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
                 ))}
+                {/* A current value that isn't one of the options (e.g. typed into an editable combo). */}
+                {f.value && !f.options.some((o) => o.value === f.value) && (
+                  <option value={f.value}>{f.value}</option>
+                )}
               </select>
             );
           default:

@@ -142,7 +142,9 @@ const MAX_IMAGE_PX = 2000;
 async function readImage(file: File): Promise<Uint8Array> {
   const bitmap = await createImageBitmap(file);
   const { width, height } = fitWithin(bitmap.width, bitmap.height, MAX_IMAGE_PX);
-  if (width === bitmap.width && (file.type === 'image/png' || file.type === 'image/jpeg')) {
+  // PNGs that fit are embedded as is. JPEGs are always redrawn: the browser applies their EXIF
+  // orientation when decoding, but a JPEG embedded in a PDF would ignore it (phone photos).
+  if (width === bitmap.width && file.type === 'image/png') {
     bitmap.close();
     return new Uint8Array(await file.arrayBuffer());
   }

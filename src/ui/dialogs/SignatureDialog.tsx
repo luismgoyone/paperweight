@@ -134,7 +134,7 @@ function TypePad({
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = ink;
-    ctx.font = `120px "${font}"`;
+    ctx.font = `120px "${font}", cursive`;
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(name, 20, canvas.height * 0.68, canvas.width - 40);
   }, [name, font, ink, canvasRef]);
@@ -271,6 +271,8 @@ export function SignatureDialog() {
       setTool('sign');
       setPending({ asset, kind: 'signature' });
       setOpen(false);
+    } catch (e) {
+      showToast(`The signature could not be added: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }

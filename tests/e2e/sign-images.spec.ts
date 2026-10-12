@@ -105,7 +105,8 @@ test('insert an image, resize it from a corner, and delete it', async ({ page })
   expect(width).toBe(300); // 400 px * 0.75, capped at 300 pt
 
   const se = (await page.getByTestId('handle-se').boundingBox())!;
-  await drag(page, { x: se.x + 5, y: se.y + 5 }, { x: se.x + 5 - 100, y: se.y + 5 - 50 });
+  const grab = { x: se.x + se.width / 2, y: se.y + se.height / 2 };
+  await drag(page, grab, { x: grab.x - 100, y: grab.y - 50 });
   const [resized] = images(await download(page));
   expect(resized![2]! - resized![0]!).toBe(200);
   expect(resized![0]).toBe(first![0]); // top-left stays put

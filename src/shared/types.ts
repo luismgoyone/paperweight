@@ -59,7 +59,7 @@ export type TextStyle = {
 export type TextSpec = { box: Rect; text: string; style: TextStyle };
 
 /**
- * Images (and signatures) are registered with the engine once under a content key and
+ * Images (and signatures) are registered with the engine once under a random key and
  * referenced from ops by that key, so the op log never carries image bytes.
  */
 export type ImageAsset = { key: string; bytes: Uint8Array; width: number; height: number };
@@ -106,7 +106,8 @@ export type FormField = {
   maxLen: number;
   /** For checkboxes and radio buttons: the value this widget sets when selected. */
   onState: string | null;
-  options: string[];
+  /** Dropdown options: what's shown, and the export value stored in the PDF. */
+  options: { label: string; value: string }[];
 };
 
 /** Ops that get a checkpoint taken before them (redact, page delete; spec §3.3). */

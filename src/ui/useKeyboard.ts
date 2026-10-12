@@ -24,6 +24,8 @@ export function useKeyboard(focusSearch: () => void) {
 
       if (mod && key === 's') {
         e.preventDefault();
+        // Commit whatever is being typed (form fields commit on blur) before saving.
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
         void s.download();
       } else if (mod && key === 'f') {
         e.preventDefault();

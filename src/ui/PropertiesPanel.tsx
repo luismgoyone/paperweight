@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { EditorObject } from '../editor/objects';
 import { useEditor } from '../editor/store';
 import { PALETTE, useTools, type ShapeStyle } from '../editor/tools';
@@ -439,12 +439,14 @@ function SelectionControls({ object }: { object: EditorObject }) {
 }
 
 function AssetThumb({ bytes, label }: { bytes: Uint8Array; label: string }) {
-  const url = useMemo(
-    () => URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/png' })),
-    [bytes],
-  );
-  useEffect(() => () => URL.revokeObjectURL(url), [url]);
-  return <img src={url} alt={label} className="max-h-14 max-w-full object-contain" />;
+  // The object URL is created and revoked by the same effect, so it's valid while shown.
+  const img = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/png' }));
+    if (img.current) img.current.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [bytes]);
+  return <img ref={img} alt={label} className="max-h-14 max-w-full object-contain" />;
 }
 
 function SignaturePicker() {

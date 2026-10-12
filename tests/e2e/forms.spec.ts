@@ -19,7 +19,7 @@ const values = (doc: mupdf.PDFDocument) =>
     doc
       .loadPage(0)
       .getWidgets()
-      .filter((w) => !w.isRadioButton() || w.getValue() !== 'Off')
+      .filter((w) => w.getName() !== '' && (!w.isRadioButton() || w.getValue() !== 'Off'))
       .map((w) => [w.getName(), w.getValue()]),
   );
 
@@ -59,6 +59,7 @@ test('fills every field type with keyboard tab order', async ({ page }) => {
     subscribe: 'Yes',
     plan: 'team',
     country: 'Mexico',
+    size: 'S',
   });
 });
 
@@ -78,4 +79,22 @@ test('undo reverts a field', async ({ page }) => {
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(page.getByLabel('subscribe')).not.toBeChecked();
   expect(values(await download(page)).subscribe).toBe('Off');
+});
+
+test('⌘S saves a value that is still being typed', async ({ page }) => {
+  await page.getByRole('button', { name: 'Fill form' }).click();
+  await page.getByLabel('name', { exact: true }).fill('Typed then saved');
+  const event = page.waitForEvent('download');
+  await page.keyboard.press('ControlOrMeta+s');
+  const doc = new mupdf.PDFDocument(readFileSync(await (await event).path()));
+  expect(values(doc).name).toBe('Typed then saved');
+});
+
+test('dropdowns store the export value and show the label', async ({ page }) => {
+  await page.getByRole('button', { name: 'Fill form' }).click();
+  const size = page.getByLabel('size');
+  await expect(size).toHaveValue('S');
+  await expect(size.locator('option:checked')).toHaveText('Small');
+  await size.selectOption({ label: 'Medium' });
+  expect(values(await download(page)).size).toBe('M');
 });

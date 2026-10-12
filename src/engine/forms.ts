@@ -22,48 +22,73 @@ function onState(w: mupdf.PDFWidget): string | null {
   return state;
 }
 
+function choiceOptions(w: mupdf.PDFWidget): FormField['options'] {
+  const labels = w.getOptions();
+  const values = w.getOptions(true);
+  return labels.map((label, i) => ({ label, value: values[i] ?? label }));
+}
+
+/** Form widgets on a page. Widgets without a field name can't be addressed and are skipped. */
 export function listFields(doc: mupdf.Document, pageIndex: number): FormField[] {
   const page = doc.loadPage(pageIndex) as mupdf.PDFPage;
-  if (!('getWidgets' in page)) return [];
-  return page.getWidgets().map((w) => {
-    const [x0, y0, x1, y1] = w.getRect();
-    const type = fieldType(w);
-    return {
-      name: w.getName(),
-      type,
-      rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 },
-      value: w.getValue(),
-      readOnly: w.isReadOnly(),
-      multiline: type === 'text' && w.isMultiline(),
-      maxLen: type === 'text' ? w.getMaxLen() : 0,
-      onState: type === 'checkbox' || type === 'radio' ? onState(w) : null,
-      options: type === 'choice' ? w.getOptions() : [],
-    };
-  });
+  try {
+    if (!('getWidgets' in page)) return [];
+    return page
+      .getWidgets()
+      .filter((w) => w.getName() !== '')
+      .map((w) => {
+        const [x0, y0, x1, y1] = w.getRect();
+        const type = fieldType(w);
+        return {
+          name: w.getName(),
+          type,
+          rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 },
+          value: w.getValue(),
+          readOnly: w.isReadOnly(),
+          multiline: type === 'text' && w.isMultiline(),
+          maxLen: type === 'text' ? w.getMaxLen() : 0,
+          onState: type === 'checkbox' || type === 'radio' ? onState(w) : null,
+          options: type === 'choice' ? choiceOptions(w) : [],
+        };
+      });
+  } finally {
+    page.destroy();
+  }
 }
 
 export function applyFormSet(doc: mupdf.PDFDocument, op: Extract<Op, { kind: 'form.set' }>): void {
-  const widgets: mupdf.PDFWidget[] = [];
-  for (let i = 0; i < doc.countPages(); i++) {
-    for (const w of doc.loadPage(i).getWidgets()) if (w.getName() === op.field) widgets.push(w);
-  }
-  if (!widgets.length) throw new Error(`There is no field named "${op.field}"`);
-  if (widgets.some((w) => w.isReadOnly())) throw new Error(`"${op.field}" is read-only`);
-
-  for (const w of widgets) {
-    if (w.isText()) {
-      w.setTextValue(String(op.value));
-    } else if (w.isCheckbox()) {
-      const on = w.getValue() !== 'Off' && w.getValue() !== '';
-      if (on !== Boolean(op.value)) w.toggle();
-    } else if (w.isRadioButton()) {
-      // Selecting one widget of the group turns the others off.
-      if (onState(w) === op.value && w.getValue() !== op.value) w.toggle();
-    } else if (w.isChoice()) {
-      w.setChoiceValue(String(op.value));
-    } else {
-      throw new Error(`"${op.field}" can't be filled in here`);
+  if (!op.field) throw new Error('A field name is required');
+  const pages: mupdf.PDFPage[] = [];
+  try {
+    const widgets: mupdf.PDFWidget[] = [];
+    for (let i = 0; i < doc.countPages(); i++) {
+      const page = doc.loadPage(i);
+      pages.push(page);
+      for (const w of page.getWidgets()) if (w.getName() === op.field) widgets.push(w);
     }
-    w.update();
+    if (!widgets.length) throw new Error(`There is no field named "${op.field}"`);
+    if (widgets.some((w) => w.isReadOnly())) throw new Error(`"${op.field}" is read-only`);
+    if (widgets[0]!.isRadioButton() && !widgets.some((w) => onState(w) === op.value)) {
+      throw new Error(`"${op.field}" has no option "${String(op.value)}"`);
+    }
+
+    for (const w of widgets) {
+      if (w.isText()) {
+        w.setTextValue(String(op.value));
+      } else if (w.isCheckbox()) {
+        const on = w.getValue() !== 'Off' && w.getValue() !== '';
+        if (on !== Boolean(op.value)) w.toggle();
+      } else if (w.isRadioButton()) {
+        // Selecting one widget of the group turns the others off.
+        if (onState(w) === op.value && w.getValue() !== op.value) w.toggle();
+      } else if (w.isChoice()) {
+        w.setChoiceValue(String(op.value));
+      } else {
+        throw new Error(`"${op.field}" can't be filled in here`);
+      }
+      w.update();
+    }
+  } finally {
+    for (const page of pages) page.destroy();
   }
 }

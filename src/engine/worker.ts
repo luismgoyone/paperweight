@@ -4,7 +4,7 @@ import { E2E_CRASH, ENGINE_READY, type EngineApi } from './api';
 import { EngineSession } from './document';
 import { registerFont } from './fonts';
 import { listFields } from './forms';
-import { imageSize, registerImage } from './images';
+import { imageSize, registerImage, retainImages } from './images';
 import { renderPageRGBA, searchDocument } from './render';
 import { selectText, textRuns } from './text';
 
@@ -47,6 +47,9 @@ const api: EngineApi = {
   async registerImage(key, bytes) {
     registerImage(key, bytes);
     return imageSize(bytes);
+  },
+  async retainImages(keys) {
+    retainImages(keys);
   },
   async registerFont(id, bytes) {
     registerFont(id, bytes);
