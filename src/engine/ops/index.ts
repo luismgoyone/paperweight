@@ -6,6 +6,7 @@ import { applyImageOp } from './images';
 import { applySetTitle } from './meta';
 import { applyPageOp } from './pages';
 import { applyTextOp } from './text-add';
+import { applyTextEditOp } from './text-edit';
 
 /** An op could not be applied; the document stays at its prior state (spec §7). */
 export class OpError extends Error {
@@ -31,6 +32,8 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
       case 'text.update':
       case 'text.delete':
         return applyTextOp(doc, op);
+      case 'text.edit':
+        return applyTextEditOp(doc, op);
       case 'image.add':
       case 'image.update':
       case 'image.delete':

@@ -49,9 +49,20 @@ function charsToRun(chars: Char[]): TextRun | null {
  * 1.5 em so table columns become separate runs. Coordinates are page space (as rendered).
  */
 export function textRuns(doc: mupdf.Document, pageIndex: number): TextRun[] {
+  return runsWithGlyphs(doc, pageIndex).map((r) => r.run);
+}
+
+/** A run plus the quads of its visible characters (for removing exactly those glyphs). */
+export type RunGlyphs = { run: TextRun; quads: mupdf.Quad[] };
+
+export function runsWithGlyphs(doc: mupdf.Document, pageIndex: number): RunGlyphs[] {
   const page = doc.loadPage(pageIndex);
   const stext = page.toStructuredText('preserve-whitespace');
-  const runs: TextRun[] = [];
+  const runs: RunGlyphs[] = [];
+  const push = (segment: Char[]) => {
+    const run = charsToRun(segment);
+    if (run) runs.push({ run, quads: segment.filter((ch) => ch.c.trim()).map((ch) => ch.quad) });
+  };
   let line: Char[] = [];
   const flush = () => {
     let segment: Char[] = [];
@@ -59,15 +70,13 @@ export function textRuns(doc: mupdf.Document, pageIndex: number): TextRun[] {
     for (const ch of line) {
       const left = Math.min(ch.quad[0], ch.quad[4]);
       if (lastRight !== null && ch.c.trim() && left - lastRight > ch.size * 1.5) {
-        const run = charsToRun(segment);
-        if (run) runs.push(run);
+        push(segment);
         segment = [];
       }
       segment.push(ch);
       if (ch.c.trim()) lastRight = Math.max(ch.quad[2], ch.quad[6]);
     }
-    const run = charsToRun(segment);
-    if (run) runs.push(run);
+    push(segment);
     line = [];
   };
   try {

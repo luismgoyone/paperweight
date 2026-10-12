@@ -44,7 +44,13 @@ export type AnnotType = AnnotSpec['type'];
 export type TextAlign = 'left' | 'center' | 'right';
 
 export type TextStyle = {
+  /** Bundled family; for edited text, the fallback when the original font lacks a glyph. */
   family: FontFamily;
+  /**
+   * Edited existing text (spec §4): prefer the run's own font. `fontName` is the PDF's name for
+   * it, shown in the UI. The engine falls back to `family` when that font can't draw a glyph.
+   */
+  original?: { fontName: string };
   size: number;
   color: Color;
   align: TextAlign;
@@ -88,6 +94,17 @@ export type Op =
   | { kind: 'text.add'; id: string; page: number; spec: TextSpec }
   | { kind: 'text.update'; id: string; page: number; spec: TextSpec }
   | { kind: 'text.delete'; id: string; page: number }
+  /**
+   * Replaces an existing run of text in place (spec §6 Phase 5). `target` is the run as the
+   * user saw it; `spec` is the replacement (its box keeps the run's baseline and anchored edge).
+   */
+  | {
+      kind: 'text.edit';
+      id: string;
+      page: number;
+      target: { text: string; bbox: Rect };
+      spec: TextSpec;
+    }
   | { kind: 'image.add'; id: string; page: number; box: Rect; image: string }
   | { kind: 'image.update'; id: string; page: number; box: Rect; image: string }
   | { kind: 'image.delete'; id: string; page: number }
