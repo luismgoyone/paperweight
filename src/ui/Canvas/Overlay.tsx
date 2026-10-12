@@ -4,7 +4,7 @@ import { hitTest, objectBounds, translate, type EditorObject } from '../../edito
 import { snapBox, type Guide, type SnapTarget } from '../../editor/snapping';
 import { objectOp } from '../../editor/object-ops';
 import { useEditor } from '../../editor/store';
-import { nearestRun, styleFromRun } from '../../editor/text-defaults';
+import { editSpecFor, nearestRun, styleFromRun } from '../../editor/text-defaults';
 import { DEFAULT_TEXT_STYLE, MARKUP_COLORS, useTools, type Tool } from '../../editor/tools';
 import { firstBaselineOffset } from '../../shared/fonts';
 import type { AnnotSpec, PageInfo, Point, Quad, Rect, TextRun, TextSpec } from '../../shared/types';
@@ -21,6 +21,7 @@ type Gesture =
   | { kind: 'markup'; tool: 'highlight' | 'underline' | 'strikeout'; start: Point }
   | { kind: 'ink'; points: Point[] }
   | { kind: 'shape'; tool: 'rect' | 'ellipse' | 'line' | 'arrow'; start: Point; end: Point }
+  | { kind: 'redact'; start: Point; end: Point }
   | {
       kind: 'resize';
       object: EditorObject & { kind: 'image' };
@@ -189,7 +190,9 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
   const layer = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const runs = useRef<TextRun[]>([]);
+  const redactMarks = useTools((s) => s.redactMarks);
   const [preview, setPreview] = useState<{
+    redact?: Rect;
     annot?: AnnotSpec;
     quads?: Quad[];
     moved?: EditorObject;
@@ -216,6 +219,30 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     [objects, page.index],
   );
   const selected = pageObjects.find((o) => o.id === selectedId);
+
+  // The PDF's own text under a point (not text the user added: that is edited as an object).
+  const [hover, setHover] = useState<TextRun | null>(null);
+  const runAt = (p: Point): TextRun | null => {
+    const pad = 1;
+    const run = runs.current.find(
+      (r) =>
+        p.x >= r.bbox.x - pad &&
+        p.x <= r.bbox.x + r.bbox.w + pad &&
+        p.y >= r.bbox.y - pad &&
+        p.y <= r.bbox.y + r.bbox.h + pad,
+    );
+    if (!run) return null;
+    // Text the user added or already edited is drawn in its real font, which can be wider than
+    // the box measured with the bundled one: treat any substantial overlap as ours.
+    const ours = pageObjects.some((o) => {
+      if (o.kind !== 'text') return false;
+      const b = objectBounds(o);
+      const w = Math.min(run.bbox.x + run.bbox.w, b.x + b.w) - Math.max(run.bbox.x, b.x);
+      const h = Math.min(run.bbox.y + run.bbox.h, b.y + b.h) - Math.max(run.bbox.y, b.y);
+      return w > 0 && h > 0 && w * h >= 0.3 * run.bbox.w * run.bbox.h;
+    });
+    return ours ? null : run;
+  };
 
   const toPage = useCallback(
     (e: { clientX: number; clientY: number }): Point => {
@@ -274,6 +301,32 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         select(hit?.id ?? null);
         if (hit) gesture.current = { kind: 'move', object: hit, start: p, moved: null };
         return;
+      case 'edit': {
+        if (hit?.kind === 'text') {
+          select(null);
+          setDraft({
+            id: hit.id,
+            page: page.index,
+            isNew: false,
+            original: hit.spec,
+            spec: hit.spec,
+          });
+          return;
+        }
+        const run = runAt(p);
+        if (!run) return;
+        select(null);
+        setHover(null);
+        setDraft({
+          id: newId(),
+          page: page.index,
+          isNew: true,
+          original: null,
+          edit: { target: { text: run.text, bbox: run.bbox } },
+          spec: editSpecFor(run, runs.current, measureTextWidth),
+        });
+        return;
+      }
       case 'text':
         if (hit?.kind === 'text') {
           select(null);
@@ -334,6 +387,9 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         });
         return;
       }
+      case 'redact':
+        gesture.current = { kind: 'redact', start: p, end: p };
+        return;
       case 'note': {
         const id = newId();
         void commit({
@@ -359,7 +415,14 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const g = gesture.current;
-    if (!g) return;
+    if (!g) {
+      // Edit text: show which run a click would edit.
+      if (tool === 'edit' && !draft) {
+        const run = runAt(toPage(e));
+        if (run !== hover) setHover(run);
+      }
+      return;
+    }
     const p = toPage(e);
     switch (g.kind) {
       case 'move': {
@@ -399,6 +462,10 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         g.end = e.shiftKey ? constrain(g.tool, g.start, p) : p;
         setPreview({ annot: shapeAnnot(g) });
         return;
+      case 'redact':
+        g.end = p;
+        setPreview({ redact: normalize(g.start, g.end) });
+        return;
       case 'resize':
         g.resized = resizeBox(g.object.box, g.corner, p);
         setPreview({ moved: { ...g.object, box: g.resized } });
@@ -418,6 +485,13 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
       case 'resize':
         if (g.resized) await commit(objectOp({ ...g.object, box: g.resized }, 'update'));
         break;
+      case 'redact': {
+        // Marking only: nothing is removed until "Apply redactions" is confirmed.
+        const rect = normalize(g.start, p);
+        if (rect.w > 2 && rect.h > 2)
+          useTools.getState().addRedactMarks([{ page: page.index, rect }]);
+        break;
+      }
       case 'markup': {
         const quads = await selectText(page.index, g.start, p);
         if (quads.length) {
@@ -465,6 +539,22 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
       const current = useTools.getState().draft;
       setDraft(null);
       if (!current || !spec) return;
+      if (current.edit) {
+        // Unchanged text (and style): nothing to do. Emptying a run removes it.
+        const unchanged =
+          spec.text === current.edit.target.text &&
+          JSON.stringify(spec.style) === JSON.stringify(current.spec.style);
+        if (unchanged) return;
+        await commit({
+          kind: 'text.edit',
+          id: current.id,
+          page: current.page,
+          target: current.edit.target,
+          spec,
+        });
+        if (spec.text.trim()) select(current.id);
+        return;
+      }
       if (!spec.text.trim()) {
         if (!current.isNew)
           await commit({ kind: 'text.delete', id: current.id, page: current.page });
@@ -504,6 +594,8 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     sign: 'copy',
     image: 'copy',
     form: 'default',
+    edit: 'text',
+    redact: 'crosshair',
   };
 
   const nudge = useTools((s) => s.nudge);
@@ -590,6 +682,34 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
               strokeWidth={1}
             />
           ),
+        )}
+        {[
+          ...redactMarks.filter((m) => m.page === page.index).map((m) => m.rect),
+          ...(preview.redact ? [preview.redact] : []),
+        ].map((r, i) => (
+          <rect
+            key={i}
+            data-testid="redact-mark"
+            x={r.x * zoom}
+            y={r.y * zoom}
+            width={r.w * zoom}
+            height={r.h * zoom}
+            fill="rgb(220 38 38 / 0.15)"
+            stroke="#dc2626"
+            strokeDasharray="4 3"
+          />
+        ))}
+        {tool === 'edit' && hover && !draft && (
+          <rect
+            data-testid="edit-hover"
+            x={hover.bbox.x * zoom - 2}
+            y={hover.bbox.y * zoom - 2}
+            width={hover.bbox.w * zoom + 4}
+            height={hover.bbox.h * zoom + 4}
+            fill="rgb(37 99 235 / 0.08)"
+            stroke="#2563eb"
+            strokeDasharray="3 2"
+          />
         )}
         {selectionBox && (
           <rect

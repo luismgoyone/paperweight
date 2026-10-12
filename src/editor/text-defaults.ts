@@ -1,5 +1,10 @@
-import { familyForPdfFont, styleForPdfFont } from '../shared/fonts';
-import type { Point, TextRun, TextStyle } from '../shared/types';
+import {
+  LINE_HEIGHT,
+  familyForPdfFont,
+  firstBaselineOffset,
+  styleForPdfFont,
+} from '../shared/fonts';
+import type { Point, TextRun, TextSpec, TextStyle } from '../shared/types';
 
 /** Distance from a point to a run's box (0 inside). */
 function distance(run: TextRun, p: Point): number {
@@ -30,5 +35,37 @@ export function styleFromRun(run: TextRun): TextStyle {
     color: run.color,
     align: 'left',
     ...styleForPdfFont(run.font),
+  };
+}
+
+/**
+ * The editor draft for changing an existing run in place (spec §6 Phase 5). Numbers in a
+ * right-aligned column (another run shares the right edge, not the left) keep their right
+ * edge; everything else keeps its left edge. The baseline is the run's own.
+ */
+export function editSpecFor(
+  run: TextRun,
+  pageRuns: readonly TextRun[],
+  measure: (text: string, style: TextStyle) => number,
+): TextSpec {
+  const columnRight = pageRuns.some(
+    (r) => r !== run && Math.abs(r.x1 - run.x1) < 0.5 && Math.abs(r.x0 - run.x0) >= 0.5,
+  );
+  const style: TextStyle = {
+    ...styleFromRun(run),
+    size: run.size,
+    align: columnRight ? 'right' : 'left',
+    original: { fontName: run.font },
+  };
+  const w = Math.max(1, measure(run.text, style));
+  return {
+    text: run.text,
+    style,
+    box: {
+      x: columnRight ? run.x1 - w : run.x0,
+      y: run.baseline - firstBaselineOffset(style.family, style.size),
+      w,
+      h: LINE_HEIGHT * style.size,
+    },
   };
 }

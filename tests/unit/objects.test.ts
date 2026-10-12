@@ -35,6 +35,21 @@ describe('foldObjects', () => {
   });
 });
 
+describe('edited text', () => {
+  it('becomes a text object that later edits update', () => {
+    const objects = foldObjects([
+      {
+        kind: 'text.edit',
+        id: 'e',
+        page: 0,
+        target: { text: '$26', bbox: { x: 0, y: 0, w: 10, h: 10 } },
+        spec: text,
+      },
+    ]);
+    expect(objects.get('e')).toEqual({ id: 'e', page: 0, kind: 'text', spec: text });
+  });
+});
+
 describe('objectBounds', () => {
   it('pads strokes by half their width', () => {
     expect(objectBounds({ id: 'a', page: 0, kind: 'annot', annot: rect(10, 10) })).toEqual({
@@ -213,5 +228,27 @@ describe('page ops in the object model', () => {
     const ops: Op[] = [note('a', 0), { kind: 'page.move', order: [1, 0] }];
     const moved = foldObjects(ops).get('a')!;
     expect(moved.page).toBe(1);
+  });
+});
+
+describe('redaction in the object model', () => {
+  it('drops objects under a redacted area so they can never be redrawn', () => {
+    const objects = foldObjects([
+      {
+        kind: 'text.add',
+        id: 'secret',
+        page: 0,
+        spec: { ...text, box: { x: 100, y: 100, w: 80, h: 12 } },
+      },
+      {
+        kind: 'text.add',
+        id: 'other-page',
+        page: 1,
+        spec: { ...text, box: { x: 100, y: 100, w: 80, h: 12 } },
+      },
+      { kind: 'annot.add', id: 'far', page: 0, annot: rect(400, 400) },
+      { kind: 'redact', areas: [{ page: 0, rects: [{ x: 90, y: 95, w: 50, h: 20 }] }] },
+    ]);
+    expect([...objects.keys()]).toEqual(['other-page', 'far']);
   });
 });

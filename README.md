@@ -5,8 +5,10 @@ A free PDF editor that runs entirely in your browser. **Files never leave your d
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.
 
-> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–4 (viewer, markup, add text,
-> signatures, forms, images, page management) are built; see the [Roadmap](#roadmap).
+> Live at **https://pdf-editor-navy.vercel.app**. All eight phases of the
+> [design](docs/superpowers/specs/2026-10-12-pdf-editor-design.md) are built: viewer, markup,
+> add text, signatures, forms, images, page management, editing existing text, redaction,
+> compression, passwords, OCR and Word export; see the [Roadmap](#roadmap).
 
 ## Privacy guarantees
 
@@ -30,6 +32,50 @@ Referrer-Policy: no-referrer
 ```
 
 ## Features
+
+### Export to Word (Phase 8)
+
+- **Export to Word (.docx)** (download menu) turns the PDF into an editable document:
+  paragraphs with their sizes, bold/italic and alignment, images, and simple tables detected
+  from column-aligned text. It's best effort and the menu says so: complex layouts won't
+  round-trip exactly. Word → PDF is out of scope (no fully client-side renderer).
+- A scanned page with a text layer (from OCR here or from the scanner) exports as its text,
+  without the page image. Images are capped at 200 dpi, and pages are fitted to Word's size
+  limits. Multi-column layouts aren't reflowed column by column.
+
+### OCR (Phase 7)
+
+- Scanned pages (no text layer) get a **Recognize text (OCR)** button. Tesseract runs in this
+  tab and adds an invisible text layer, so the scan can be searched and selected and looks
+  exactly the same. English is included. Recognised text is for searching and selecting; it
+  isn't edited in place (the scan image would still show the old words), which differs from
+  the original spec's "editable via Phase 5".
+- The OCR engine and language data (~8 MB) are served from this site and downloaded only the
+  first time you use OCR. This is the one exception to "no requests after the page loads":
+  those requests are plain downloads of the app's own files and never carry your document.
+  Tesseract's defaults (a CDN, and caching data in IndexedDB) are switched off.
+
+### Redact, compress, passwords (Phase 6)
+
+- **Redact**: drag over anything (or "Redact all matches" from search), review the marks, and
+  confirm. The content under each area is really removed from the file: text, image pixels,
+  drawings, and any notes or form-field values there. Black boxes replace it.
+- **Compress** (download menu): resamples oversized images, trims fonts and merges duplicate
+  data; shows the size before and after. Never makes a file larger.
+- **Password** (download menu): protect with an open password (AES-256) and choose what's
+  allowed (printing, copying, editing, comments, forms), or remove the password from a file you
+  opened with it. Passwords are never stored.
+
+### Edit existing text (Phase 5)
+
+- **Edit text** (E): hover any line of the PDF's own text, click, type, press Enter. The change
+  is made in place: the old glyphs are removed (no white box) and the new text is drawn in the
+  **same font**, size, color and baseline. Numbers in a right-aligned column keep their right
+  edge, so `$26 → $31` on an invoice lines up exactly.
+- If the document's font doesn't contain a character you type (common with subset fonts), a
+  metric-compatible bundled font is used instead, and the properties panel says so
+  ("Substituted: Arial → Liberation Sans"). Substitution is never silent.
+- Edits are line-level: text doesn't reflow into neighbouring lines.
 
 ### Pages (Phase 4)
 
@@ -78,18 +124,18 @@ Referrer-Policy: no-referrer
 
 ## Keyboard shortcuts
 
-| Action                        | Shortcut                     |
-| ----------------------------- | ---------------------------- |
-| Undo / redo                   | ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y)   |
-| Download                      | ⌘S                           |
-| Search                        | ⌘F, then Enter / Shift+Enter |
-| Zoom in / out                 | ⌘= / ⌘-                      |
-| Next / previous page          | PageDown / PageUp            |
-| Select / Add text / Highlight | V / T / H                    |
-| Delete selection              | Delete                       |
-| Nudge selection               | Arrow keys (Shift: 10 pt)    |
-| Finish / cancel text          | ⌘Enter / Esc                 |
-| Move selected pages           | Alt+↑ / Alt+↓                |
+| Action                                    | Shortcut                     |
+| ----------------------------------------- | ---------------------------- |
+| Undo / redo                               | ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y)   |
+| Download                                  | ⌘S                           |
+| Search                                    | ⌘F, then Enter / Shift+Enter |
+| Zoom in / out                             | ⌘= / ⌘-                      |
+| Next / previous page                      | PageDown / PageUp            |
+| Select / Add text / Edit text / Highlight | V / T / E / H                |
+| Delete selection                          | Delete                       |
+| Nudge selection                           | Arrow keys (Shift: 10 pt)    |
+| Finish / cancel text                      | ⌘Enter / Esc                 |
+| Move selected pages                       | Alt+↑ / Alt+↓                |
 
 ## Architecture
 
@@ -131,10 +177,10 @@ UI mockups made with Google Stitch live in [`docs/design/`](docs/design/).
 - [x] **Phase 2: Markup and add text**: annotations, add text, alignment guides, flatten
 - [x] **Phase 3: Signatures, forms and images**
 - [x] **Phase 4: Page management**: reorder, rotate, delete, insert, merge, extract, split
-- [ ] Phase 5: Edit existing text in the same font
-- [ ] Phase 6: Redact, compress, passwords
-- [ ] Phase 7: OCR (Tesseract.js, self-hosted)
-- [ ] Phase 8: PDF → Word
+- [x] **Phase 5: Edit existing text in the same font**
+- [x] **Phase 6: Redact, compress, passwords**
+- [x] **Phase 7: OCR** (Tesseract.js, self-hosted)
+- [x] **Phase 8: PDF → Word** (best effort)
 
 ## License
 
@@ -143,14 +189,18 @@ The full source is linked from the app ("Source code").
 
 ### Third-party licenses
 
-| Component                                | License                                                           |
-| ---------------------------------------- | ----------------------------------------------------------------- |
-| MuPDF.js (`mupdf`)                       | AGPL-3.0-or-later                                                 |
-| React, Zustand, Comlink                  | MIT / MIT / Apache-2.0                                            |
-| Liberation Sans, Serif, Mono             | SIL OFL 1.1 ([license](public/fonts/licenses/Liberation-OFL.txt)) |
-| Inter                                    | SIL OFL 1.1 ([license](public/fonts/licenses/Inter-OFL.txt))      |
-| Noto Sans, Noto Serif                    | SIL OFL 1.1 ([license](public/fonts/licenses/Noto-OFL.txt))       |
-| Dancing Script, Great Vibes (signatures) | SIL OFL 1.1 ([licenses](public/fonts/licenses/))                  |
+| Component                                             | License                                                           |
+| ----------------------------------------------------- | ----------------------------------------------------------------- |
+| MuPDF.js (`mupdf`)                                    | AGPL-3.0-or-later                                                 |
+| React, Zustand, Comlink                               | MIT / MIT / Apache-2.0                                            |
+| Tesseract.js, tesseract.js-core                       | Apache-2.0                                                        |
+| docx (Word export)                                    | MIT                                                               |
+| Leptonica and image codecs (inside tesseract.js-core) | BSD-2-Clause and others (see the core's license)                  |
+| English OCR model (tessdata_fast)                     | Apache-2.0 ([license](public/tessdata/LICENSE-tessdata_fast.txt)) |
+| Liberation Sans, Serif, Mono                          | SIL OFL 1.1 ([license](public/fonts/licenses/Liberation-OFL.txt)) |
+| Inter                                                 | SIL OFL 1.1 ([license](public/fonts/licenses/Inter-OFL.txt))      |
+| Noto Sans, Noto Serif                                 | SIL OFL 1.1 ([license](public/fonts/licenses/Noto-OFL.txt))       |
+| Dancing Script, Great Vibes (signatures)              | SIL OFL 1.1 ([licenses](public/fonts/licenses/))                  |
 
 Fonts are self-hosted and loaded once at startup (about 11 MB uncompressed), so the
 "no requests after load" guarantee holds while editing.
