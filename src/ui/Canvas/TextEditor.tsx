@@ -55,7 +55,7 @@ export function TextEditor({ draft, zoom, measure, onCommit }: Props) {
   const finish = (cancel = false) => {
     if (committed.current) return;
     committed.current = true;
-    onCommit(cancel ? (draft.isNew ? null : draft.spec) : latest.current);
+    onCommit(cancel ? null : latest.current);
   };
   const finishRef = useRef(finish);
   useLayoutEffect(() => {

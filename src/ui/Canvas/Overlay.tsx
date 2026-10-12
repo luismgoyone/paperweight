@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } 
 import { newId } from '../../editor/ids';
 import { hitTest, objectBounds, translate, type EditorObject } from '../../editor/objects';
 import { snapBox, type Guide, type SnapTarget } from '../../editor/snapping';
+import { objectOp } from '../../editor/object-ops';
 import { useEditor } from '../../editor/store';
 import { nearestRun, styleFromRun } from '../../editor/text-defaults';
 import { DEFAULT_TEXT_STYLE, MARKUP_COLORS, useTools, type Tool } from '../../editor/tools';
@@ -15,22 +16,10 @@ const SNAP_PX = 6; // snap threshold in screen pixels
 const HIT_PX = 4;
 
 type Gesture =
-  | { kind: 'move'; object: EditorObject; start: Point; moved: boolean }
+  | { kind: 'move'; object: EditorObject; start: Point; moved: EditorObject | null }
   | { kind: 'markup'; tool: 'highlight' | 'underline' | 'strikeout'; start: Point }
   | { kind: 'ink'; points: Point[] }
   | { kind: 'shape'; tool: 'rect' | 'ellipse' | 'line' | 'arrow'; start: Point; end: Point };
-
-export function annotOpFor(object: EditorObject, kind: 'update' | 'delete') {
-  const base = { id: object.id, page: object.page };
-  if (kind === 'delete') {
-    return object.kind === 'annot'
-      ? ({ kind: 'annot.delete', ...base } as const)
-      : ({ kind: 'text.delete', ...base } as const);
-  }
-  return object.kind === 'annot'
-    ? ({ kind: 'annot.update', ...base, annot: object.annot } as const)
-    : ({ kind: 'text.update', ...base, spec: object.spec } as const);
-}
 
 /** Snap targets: existing text runs plus other added objects (spec §6 Phase 2). */
 function snapTargets(
@@ -226,7 +215,13 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
       snapTargets(runs.current, objects, page.index),
       SNAP_PX / zoom,
     );
-    setDraft({ id: newId(), page: page.index, isNew: true, spec: { box, text: '', style } });
+    setDraft({
+      id: newId(),
+      page: page.index,
+      isNew: true,
+      original: null,
+      spec: { box, text: '', style },
+    });
   };
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
@@ -240,12 +235,18 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     switch (tool) {
       case 'select':
         select(hit?.id ?? null);
-        if (hit) gesture.current = { kind: 'move', object: hit, start: p, moved: false };
+        if (hit) gesture.current = { kind: 'move', object: hit, start: p, moved: null };
         return;
       case 'text':
         if (hit?.kind === 'text') {
           select(null);
-          setDraft({ id: hit.id, page: page.index, isNew: false, spec: hit.spec });
+          setDraft({
+            id: hit.id,
+            page: page.index,
+            isNew: false,
+            original: hit.spec,
+            spec: hit.spec,
+          });
         } else {
           startText(p);
         }
@@ -296,7 +297,6 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         const dx = p.x - g.start.x;
         const dy = p.y - g.start.y;
         if (!g.moved && Math.hypot(dx, dy) * zoom < 3) return;
-        g.moved = true;
         let moved = translate(g.object, dx, dy);
         const b = objectBounds(moved);
         const offset =
@@ -312,6 +312,7 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
               SNAP_PX / zoom,
             );
         moved = translate(moved, box.x - b.x, box.y - b.y);
+        g.moved = moved;
         setPreview({ moved, guides });
         return;
       }
@@ -339,7 +340,7 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     const p = toPage(e);
     switch (g.kind) {
       case 'move':
-        if (g.moved && preview.moved) await commit(annotOpFor(preview.moved, 'update'));
+        if (g.moved) await commit(objectOp(g.moved, 'update'));
         break;
       case 'markup': {
         const quads = await selectText(page.index, g.start, p);
@@ -382,15 +383,19 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     setPreview({});
   };
 
+  /** `spec` null = cancel. Cancelling, or closing unchanged text, commits nothing. */
   const commitDraft = useCallback(
     async (spec: TextSpec | null) => {
       const current = useTools.getState().draft;
       setDraft(null);
-      if (!current) return;
-      const text = spec?.text ?? '';
-      if (!spec || !text.trim()) {
+      if (!current || !spec) return;
+      if (!spec.text.trim()) {
         if (!current.isNew)
           await commit({ kind: 'text.delete', id: current.id, page: current.page });
+        return;
+      }
+      if (current.original && JSON.stringify(current.original) === JSON.stringify(spec)) {
+        select(current.id);
         return;
       }
       await commit(
@@ -402,6 +407,11 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     },
     [commit, select, setDraft],
   );
+
+  const cancelGesture = () => {
+    gesture.current = null;
+    setPreview({});
+  };
 
   const cursor: Record<Tool, string> = {
     select: 'default',
@@ -417,7 +427,11 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     note: 'copy',
   };
 
-  const shownSelection = preview.moved ?? selected;
+  const nudge = useTools((s) => s.nudge);
+  const nudged =
+    selected && nudge?.id === selected.id ? translate(selected, nudge.dx, nudge.dy) : undefined;
+  const moving = preview.moved ?? nudged;
+  const shownSelection = moving ?? selected;
   const selectionBox = shownSelection ? objectBounds(shownSelection) : null;
 
   return (
@@ -429,11 +443,22 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={(e) => void onPointerUp(e)}
+      onPointerCancel={cancelGesture}
+      onLostPointerCapture={() => {
+        // Capture is also released after pointerup; only reset if a gesture is still open.
+        if (gesture.current) cancelGesture();
+      }}
       onDoubleClick={(e) => {
         const hit = hitTest(pageObjects, page.index, toPage(e), HIT_PX / zoom);
         if (tool === 'select' && hit?.kind === 'text') {
           select(null);
-          setDraft({ id: hit.id, page: page.index, isNew: false, spec: hit.spec });
+          setDraft({
+            id: hit.id,
+            page: page.index,
+            isNew: false,
+            original: hit.spec,
+            spec: hit.spec,
+          });
         }
       }}
     >
@@ -455,9 +480,7 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
           <path key={i} d={quadPath(q, zoom)} fill="rgb(37 99 235 / 0.25)" />
         ))}
         {preview.annot && <ShapePreview annot={preview.annot} zoom={zoom} />}
-        {preview.moved?.kind === 'annot' && (
-          <ShapePreview annot={preview.moved.annot} zoom={zoom} />
-        )}
+        {moving?.kind === 'annot' && <ShapePreview annot={moving.annot} zoom={zoom} />}
         {preview.guides?.map((g, i) =>
           g.axis === 'x' ? (
             <line
@@ -493,7 +516,7 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
             fill="none"
             stroke="#2563eb"
             strokeWidth={1.5}
-            strokeDasharray={preview.moved ? '4 3' : undefined}
+            strokeDasharray={moving ? '4 3' : undefined}
           />
         )}
       </svg>

@@ -170,7 +170,9 @@ describe('pages that share content', () => {
     }
     const s = new EngineSession();
     s.open(doc.saveToBuffer('').asUint8Array().slice());
-    s.setOps([addText('t1', { box: { x: 100, y: 300, w: 200, h: 14 }, text: 'Only page one', style })]);
+    s.setOps([
+      addText('t1', { box: { x: 100, y: 300, w: 200, h: 14 }, text: 'Only page one', style }),
+    ]);
     s.setOps([
       addText('t1', { box: { x: 100, y: 300, w: 200, h: 14 }, text: 'Only page one', style }),
       { kind: 'text.delete', id: 't1', page: 0 },

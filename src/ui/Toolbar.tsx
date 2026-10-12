@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
+import { useEditor } from '../editor/store';
 import { useTools, type Tool } from '../editor/tools';
 
 const svg = (children: ReactNode) => (
@@ -109,6 +110,7 @@ const GROUPS: ToolDef[][] = [
 export function Toolbar() {
   const tool = useTools((s) => s.tool);
   const setTool = useTools((s) => s.setTool);
+  const fontsReady = useEditor((s) => s.fontsReady);
 
   return (
     <div
@@ -125,12 +127,20 @@ export function Toolbar() {
               type="button"
               aria-label={t.label}
               aria-pressed={tool === t.tool}
-              title={t.shortcut ? `${t.label} (${t.shortcut})` : t.label}
+              title={
+                t.tool === 'text' && !fontsReady
+                  ? 'Loading fonts…'
+                  : t.shortcut
+                    ? `${t.label} (${t.shortcut})`
+                    : t.label
+              }
+              // Text needs the bundled fonts, which load right after the page.
+              disabled={t.tool === 'text' && !fontsReady}
               onClick={() => setTool(t.tool)}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
                 tool === t.tool
                   ? 'bg-blue-100 text-blue-700'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40'
               }`}
             >
               {t.icon}

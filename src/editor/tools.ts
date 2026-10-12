@@ -23,7 +23,12 @@ export type TextDraft = {
   spec: TextSpec;
   /** True for text that hasn't been committed yet (commit = text.add, else text.update). */
   isNew: boolean;
+  /** For existing text: the committed spec, so cancel and no-op closes change nothing. */
+  original: TextSpec | null;
 };
+
+/** Arrow-key nudges accumulate here and become one op when the key is released. */
+export type Nudge = { id: string; dx: number; dy: number };
 
 export type ShapeStyle = { color: Color; fill: Color | null; width: number; opacity: number };
 
@@ -57,12 +62,16 @@ type ToolsState = {
   tool: Tool;
   selectedId: string | null;
   draft: TextDraft | null;
+  nudge: Nudge | null;
   shape: ShapeStyle;
   ink: ShapeStyle;
   setTool(tool: Tool): void;
   select(id: string | null): void;
   setDraft(draft: TextDraft | null): void;
   updateDraftSpec(patch: Partial<TextSpec>): void;
+  updateDraftStyle(patch: Partial<TextStyle>): void;
+  addNudge(id: string, dx: number, dy: number): void;
+  takeNudge(): Nudge | null;
   setShapeStyle(patch: Partial<ShapeStyle>): void;
   setInkStyle(patch: Partial<ShapeStyle>): void;
 };
@@ -71,6 +80,7 @@ export const useTools = create<ToolsState>()((set, get) => ({
   tool: 'select',
   selectedId: null,
   draft: null,
+  nudge: null,
   shape: { color: [0.86, 0.15, 0.15], fill: null, width: 2, opacity: 1 },
   ink: { color: [0.15, 0.39, 0.92], fill: null, width: 2, opacity: 1 },
 
@@ -86,6 +96,22 @@ export const useTools = create<ToolsState>()((set, get) => ({
   updateDraftSpec(patch) {
     const draft = get().draft;
     if (draft) set({ draft: { ...draft, spec: { ...draft.spec, ...patch } } });
+  },
+  updateDraftStyle(patch) {
+    const draft = get().draft;
+    if (draft)
+      set({
+        draft: { ...draft, spec: { ...draft.spec, style: { ...draft.spec.style, ...patch } } },
+      });
+  },
+  addNudge(id, dx, dy) {
+    const n = get().nudge;
+    set({ nudge: n && n.id === id ? { id, dx: n.dx + dx, dy: n.dy + dy } : { id, dx, dy } });
+  },
+  takeNudge() {
+    const n = get().nudge;
+    set({ nudge: null });
+    return n;
   },
   setShapeStyle(patch) {
     set({ shape: { ...get().shape, ...patch } });

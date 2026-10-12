@@ -3,7 +3,6 @@ import { translate } from '../editor/objects';
 import { useEditor } from '../editor/store';
 import { TOOL_SHORTCUTS, useTools } from '../editor/tools';
 import { zoomIn, zoomOut } from '../editor/zoom';
-import { annotOpFor } from './Canvas/Overlay';
 
 const NUDGE: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
@@ -20,7 +19,7 @@ export function useKeyboard(focusSearch: () => void) {
       const mod = e.metaKey || e.ctrlKey;
       const typing =
         e.target instanceof HTMLElement &&
-        e.target.closest('input, textarea, [contenteditable=true]');
+        e.target.closest('input, textarea, select, [contenteditable=true]');
       const key = e.key.toLowerCase();
 
       if (mod && key === 's') {
@@ -36,6 +35,8 @@ export function useKeyboard(focusSearch: () => void) {
         e.preventDefault();
         s.setZoom(zoomOut(s.zoom));
       } else if (typing) {
+        // Some browsers treat Backspace on a focused <select> as "go back", losing the document.
+        if (e.key === 'Backspace' && e.target instanceof HTMLSelectElement) e.preventDefault();
         return;
       } else if (mod && key === 'z') {
         e.preventDefault();
@@ -44,7 +45,8 @@ export function useKeyboard(focusSearch: () => void) {
         e.preventDefault();
         void s.redo();
       } else if (!mod && !e.altKey && TOOL_SHORTCUTS[key]) {
-        useTools.getState().setTool(TOOL_SHORTCUTS[key]!);
+        const tool = TOOL_SHORTCUTS[key]!;
+        if (tool !== 'text' || s.fontsReady) useTools.getState().setTool(tool);
       } else if (e.key === 'Escape') {
         const tools = useTools.getState();
         if (tools.selectedId) tools.select(null);
@@ -54,14 +56,15 @@ export function useKeyboard(focusSearch: () => void) {
         if (!selected) return;
         e.preventDefault();
         useTools.getState().select(null);
-        void s.commit(annotOpFor(selected, 'delete'));
+        void s.updateObject(selected.id, () => null);
       } else if (NUDGE[e.key]) {
         const selected = s.objects.find((o) => o.id === useTools.getState().selectedId);
         if (!selected) return;
         e.preventDefault();
+        // Held arrows repeat; accumulate and commit a single move when the key is released.
         const step = e.shiftKey ? 10 : 1;
         const [dx, dy] = NUDGE[e.key]!;
-        void s.commit(annotOpFor(translate(selected, dx * step, dy * step), 'update'));
+        useTools.getState().addNudge(selected.id, dx * step, dy * step);
       } else if (e.key === 'PageDown') {
         e.preventDefault();
         s.goToPage(s.currentPage + 1);
@@ -70,7 +73,21 @@ export function useKeyboard(focusSearch: () => void) {
         s.goToPage(s.currentPage - 1);
       }
     };
+    const commitNudge = () => {
+      const nudge = useTools.getState().takeNudge();
+      if (nudge)
+        void useEditor.getState().updateObject(nudge.id, (o) => translate(o, nudge.dx, nudge.dy));
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (NUDGE[e.key]) commitNudge();
+    };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', commitNudge);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', commitNudge);
+    };
   }, [focusSearch]);
 }

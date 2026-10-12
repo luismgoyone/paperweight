@@ -1,12 +1,15 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { EditorObject } from '../editor/objects';
 import { useEditor } from '../editor/store';
 import { PALETTE, useTools, type ShapeStyle } from '../editor/tools';
-import { FONT_FAMILIES, type FontFamily } from '../shared/fonts';
+import { FONT_FAMILIES, LINE_HEIGHT, type FontFamily } from '../shared/fonts';
 import type { AnnotSpec, Color, TextAlign, TextSpec, TextStyle } from '../shared/types';
-import { annotOpFor } from './Canvas/Overlay';
 import { colorToHex, cssColor, hexToColor, sameColor } from './colors';
 import { measureTextWidth } from './measure';
+
+// Edits to a selected object go through `updateObject`, which applies the change to the
+// latest committed object in order. Continuous controls (sliders, color wheel, size field)
+// keep a local value while adjusting and commit once when the adjustment ends (spec §3.3).
 
 function formatSize(points: { width: number; height: number }) {
   const inches = (n: number) => (n / 72).toFixed(2).replace(/\.?0+$/, '');
@@ -37,6 +40,72 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** A slider that commits once, when the user lets go. */
+function Slider(props: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onCommit: (v: number) => void;
+}) {
+  const [local, setLocal] = useState<number | null>(null);
+  const done = () => {
+    if (local !== null && local !== props.value) props.onCommit(local);
+    setLocal(null);
+  };
+  return (
+    <Field label={props.label}>
+      <input
+        aria-label={props.label}
+        type="range"
+        min={props.min}
+        max={props.max}
+        step={props.step}
+        value={local ?? props.value}
+        onChange={(e) => setLocal(Number(e.target.value))}
+        onPointerUp={done}
+        onKeyUp={done}
+        onBlur={done}
+      />
+    </Field>
+  );
+}
+
+/** Native color input; commits when the picker closes (its `change` event). */
+function CustomColor({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string;
+  value: Color;
+  onCommit: (c: Color) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const commitRef = useRef(onCommit);
+  useEffect(() => {
+    commitRef.current = onCommit;
+  });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onChange = () => commitRef.current(hexToColor(el.value));
+    el.addEventListener('change', onChange);
+    return () => el.removeEventListener('change', onChange);
+  }, []);
+  return (
+    <input
+      ref={ref}
+      type="color"
+      aria-label={label}
+      defaultValue={colorToHex(value)}
+      key={colorToHex(value)}
+      className="h-6 w-7 cursor-pointer rounded border border-slate-300 bg-white p-0"
+    />
+  );
+}
+
 function ColorPicker({
   value,
   onChange,
@@ -59,20 +128,44 @@ function ColorPicker({
           style={{ background: cssColor(p.color) }}
         />
       ))}
-      <input
-        type="color"
-        aria-label={`Custom ${label.toLowerCase()}`}
-        value={colorToHex(value)}
-        onChange={(e) => onChange(hexToColor(e.target.value))}
-        className="h-6 w-7 cursor-pointer rounded border border-slate-300 bg-white p-0"
-      />
+      <CustomColor label={`Custom ${label.toLowerCase()}`} value={value} onCommit={onChange} />
     </div>
   );
 }
 
 const input = 'h-8 rounded-md border border-slate-200 bg-white px-2 text-sm';
 
-function TextControls({ style, onChange }: { style: TextStyle; onChange: (s: TextStyle) => void }) {
+function SizeField({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+  const [local, setLocal] = useState<string | null>(null);
+  const done = () => {
+    const size = Number(local);
+    if (local !== null && size >= 4 && size <= 144 && size !== value) onCommit(size);
+    setLocal(null);
+  };
+  return (
+    <input
+      aria-label="Font size"
+      type="number"
+      min={4}
+      max={144}
+      step={0.5}
+      className={`${input} w-20 tabular-nums`}
+      value={local ?? String(value)}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={done}
+      onKeyDown={(e) => e.key === 'Enter' && done()}
+      onPointerUp={() => setTimeout(done)}
+    />
+  );
+}
+
+function TextControls({
+  style,
+  onChange,
+}: {
+  style: TextStyle;
+  onChange: (patch: Partial<TextStyle>) => void;
+}) {
   const toggle = (on: boolean) =>
     `h-8 w-8 rounded-md border text-sm ${on ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`;
   return (
@@ -82,7 +175,7 @@ function TextControls({ style, onChange }: { style: TextStyle; onChange: (s: Tex
           aria-label="Font"
           className={`${input} w-40`}
           value={style.family}
-          onChange={(e) => onChange({ ...style, family: e.target.value as FontFamily })}
+          onChange={(e) => onChange({ family: e.target.value as FontFamily })}
         >
           {FONT_FAMILIES.map((f) => (
             <option key={f}>{f}</option>
@@ -90,19 +183,7 @@ function TextControls({ style, onChange }: { style: TextStyle; onChange: (s: Tex
         </select>
       </Field>
       <Field label="Size">
-        <input
-          aria-label="Font size"
-          type="number"
-          min={4}
-          max={144}
-          step={0.5}
-          className={`${input} w-20 tabular-nums`}
-          value={style.size}
-          onChange={(e) => {
-            const size = Number(e.target.value);
-            if (size >= 4 && size <= 144) onChange({ ...style, size });
-          }}
-        />
+        <SizeField value={style.size} onCommit={(size) => onChange({ size })} />
       </Field>
       <div className="flex items-center justify-between">
         <div role="group" aria-label="Alignment" className="flex gap-1">
@@ -113,7 +194,7 @@ function TextControls({ style, onChange }: { style: TextStyle; onChange: (s: Tex
               aria-label={`Align ${a}`}
               aria-pressed={style.align === a}
               className={toggle(style.align === a)}
-              onClick={() => onChange({ ...style, align: a })}
+              onClick={() => onChange({ align: a })}
             >
               {a === 'left' ? '⇤' : a === 'center' ? '↔' : '⇥'}
             </button>
@@ -125,7 +206,7 @@ function TextControls({ style, onChange }: { style: TextStyle; onChange: (s: Tex
             aria-label="Bold"
             aria-pressed={style.bold}
             className={`${toggle(style.bold)} font-bold`}
-            onClick={() => onChange({ ...style, bold: !style.bold })}
+            onClick={() => onChange({ bold: !style.bold })}
           >
             B
           </button>
@@ -134,7 +215,7 @@ function TextControls({ style, onChange }: { style: TextStyle; onChange: (s: Tex
             aria-label="Italic"
             aria-pressed={style.italic}
             className={`${toggle(style.italic)} italic`}
-            onClick={() => onChange({ ...style, italic: !style.italic })}
+            onClick={() => onChange({ italic: !style.italic })}
           >
             I
           </button>
@@ -143,7 +224,7 @@ function TextControls({ style, onChange }: { style: TextStyle; onChange: (s: Tex
       <ColorPicker
         label="Text color"
         value={style.color}
-        onChange={(color) => onChange({ ...style, color })}
+        onChange={(color) => onChange({ color })}
       />
     </>
   );
@@ -165,17 +246,14 @@ function StrokeControls({
         value={value.color}
         onChange={(color) => onChange({ color })}
       />
-      <Field label="Width">
-        <input
-          aria-label="Stroke width"
-          type="range"
-          min={0.5}
-          max={12}
-          step={0.5}
-          value={value.width}
-          onChange={(e) => onChange({ width: Number(e.target.value) })}
-        />
-      </Field>
+      <Slider
+        label="Stroke width"
+        value={value.width}
+        min={0.5}
+        max={12}
+        step={0.5}
+        onCommit={(width) => onChange({ width })}
+      />
       {fill && (
         <Field label="Fill">
           <span className="flex items-center gap-2">
@@ -186,28 +264,23 @@ function StrokeControls({
               onChange={(e) => onChange({ fill: e.target.checked ? value.color : null })}
             />
             {value.fill && (
-              <input
-                aria-label="Fill color"
-                type="color"
-                value={colorToHex(value.fill)}
-                onChange={(e) => onChange({ fill: hexToColor(e.target.value) })}
-                className="h-6 w-7 rounded border border-slate-300 p-0"
+              <CustomColor
+                label="Fill color"
+                value={value.fill}
+                onCommit={(f) => onChange({ fill: f })}
               />
             )}
           </span>
         </Field>
       )}
-      <Field label="Opacity">
-        <input
-          aria-label="Opacity"
-          type="range"
-          min={0.1}
-          max={1}
-          step={0.05}
-          value={value.opacity}
-          onChange={(e) => onChange({ opacity: Number(e.target.value) })}
-        />
-      </Field>
+      <Slider
+        label="Opacity"
+        value={value.opacity}
+        min={0.1}
+        max={1}
+        step={0.05}
+        onCommit={(opacity) => onChange({ opacity })}
+      />
     </>
   );
 }
@@ -225,129 +298,130 @@ function restyle(spec: TextSpec, style: TextStyle): TextSpec {
   return {
     ...spec,
     style,
-    box: { ...box, x, w, h: spec.text.split('\n').length * 1.2 * style.size },
+    box: { ...box, x, w, h: spec.text.split('\n').length * LINE_HEIGHT * style.size },
   };
 }
 
-function NoteText({
-  object,
-  onCommit,
-}: {
-  object: EditorObject & { kind: 'annot' };
-  onCommit: (a: AnnotSpec) => void;
-}) {
-  const annot = object.annot as Extract<AnnotSpec, { type: 'note' }>;
-  // Keyed by the committed text by the caller, so undo/redo resets this field.
-  const [text, setText] = useState(annot.text);
+/** Note text: kept locally while typing, committed on blur or when the note is deselected. */
+function NoteText({ id, initial }: { id: string; initial: string }) {
+  const updateObject = useEditor((s) => s.updateObject);
+  const [text, setText] = useState(initial);
+  const latest = useRef({ text, initial });
+  useEffect(() => {
+    latest.current = { text, initial };
+  });
+  const save = () => {
+    const { text: t, initial: i } = latest.current;
+    if (t === i) return;
+    latest.current = { text: t, initial: t };
+    void updateObject(id, (o) =>
+      o.kind === 'annot' && o.annot.type === 'note' ? { ...o, annot: { ...o.annot, text: t } } : o,
+    );
+  };
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  });
+  useEffect(() => () => saveRef.current(), []);
   return (
     <textarea
       aria-label="Note text"
-      autoFocus={!annot.text}
+      autoFocus={!initial}
       rows={4}
       value={text}
       placeholder="Write a note…"
       onChange={(e) => setText(e.target.value)}
-      onBlur={() => text !== annot.text && onCommit({ ...annot, text })}
+      onBlur={save}
       className="w-full rounded-md border border-slate-200 p-2 text-sm"
     />
   );
 }
 
-function SelectionControls({ object }: { object: EditorObject }) {
-  const commit = useEditor((s) => s.commit);
-  const select = useTools((s) => s.select);
-  const update = (next: EditorObject) => void commit(annotOpFor(next, 'update'));
+const TITLES: Record<string, string> = {
+  text: 'Text',
+  highlight: 'Highlight',
+  underline: 'Underline',
+  strikeout: 'Strikethrough',
+  ink: 'Drawing',
+  rect: 'Rectangle',
+  ellipse: 'Ellipse',
+  line: 'Line',
+  arrow: 'Arrow',
+  note: 'Note',
+};
 
-  let body: ReactNode = null;
+function SelectionControls({ object }: { object: EditorObject }) {
+  const updateObject = useEditor((s) => s.updateObject);
+  const select = useTools((s) => s.select);
+  const patchAnnot = (patch: Partial<Record<string, unknown>>) =>
+    void updateObject(object.id, (o) =>
+      o.kind === 'annot' ? { ...o, annot: { ...o.annot, ...patch } as AnnotSpec } : o,
+    );
+
+  let body: ReactNode;
   if (object.kind === 'text') {
     body = (
       <TextControls
         style={object.spec.style}
-        onChange={(style) => update({ ...object, spec: restyle(object.spec, style) })}
+        onChange={(patch) =>
+          void updateObject(object.id, (o) =>
+            o.kind === 'text' ? { ...o, spec: restyle(o.spec, { ...o.spec.style, ...patch }) } : o,
+          )
+        }
       />
     );
   } else {
     const a = object.annot;
-    const updateAnnot = (annot: AnnotSpec) => update({ ...object, annot });
     if (a.type === 'note') {
       body = (
         <>
-          <NoteText
-            key={a.text}
-            object={object as EditorObject & { kind: 'annot' }}
-            onCommit={updateAnnot}
-          />
-          <ColorPicker
-            label="Color"
-            value={a.color}
-            onChange={(color) => updateAnnot({ ...a, color })}
-          />
+          <NoteText key={a.text} id={object.id} initial={a.text} />
+          <ColorPicker label="Color" value={a.color} onChange={(color) => patchAnnot({ color })} />
         </>
       );
     } else if (a.type === 'highlight' || a.type === 'underline' || a.type === 'strikeout') {
       body = (
         <>
-          <ColorPicker
-            label="Color"
-            value={a.color}
-            onChange={(color) => updateAnnot({ ...a, color })}
+          <ColorPicker label="Color" value={a.color} onChange={(color) => patchAnnot({ color })} />
+          <Slider
+            label="Opacity"
+            value={a.opacity}
+            min={0.1}
+            max={1}
+            step={0.05}
+            onCommit={(opacity) => patchAnnot({ opacity })}
           />
-          <Field label="Opacity">
-            <input
-              aria-label="Opacity"
-              type="range"
-              min={0.1}
-              max={1}
-              step={0.05}
-              value={a.opacity}
-              onChange={(e) => updateAnnot({ ...a, opacity: Number(e.target.value) })}
-            />
-          </Field>
         </>
       );
     } else {
       const stroked = a as Extract<AnnotSpec, { width: number }>;
-      const value: ShapeStyle = {
-        color: stroked.color,
-        width: stroked.width,
-        opacity: stroked.opacity,
-        fill: 'fill' in stroked ? stroked.fill : null,
-      };
+      const hasFill = stroked.type === 'rect' || stroked.type === 'ellipse';
       body = (
         <StrokeControls
-          value={value}
-          fill={stroked.type === 'rect' || stroked.type === 'ellipse'}
+          value={{
+            color: stroked.color,
+            width: stroked.width,
+            opacity: stroked.opacity,
+            fill: 'fill' in stroked ? stroked.fill : null,
+          }}
+          fill={hasFill}
           onChange={(patch) => {
-            const next = { ...stroked, ...patch };
-            if (stroked.type !== 'rect' && stroked.type !== 'ellipse')
-              delete (next as { fill?: unknown }).fill;
-            updateAnnot(next as AnnotSpec);
+            const { fill, ...rest } = patch;
+            patchAnnot(hasFill && 'fill' in patch ? { ...rest, fill } : rest);
           }}
         />
       );
     }
   }
 
-  const titles: Record<string, string> = {
-    text: 'Text',
-    highlight: 'Highlight',
-    underline: 'Underline',
-    strikeout: 'Strikethrough',
-    ink: 'Drawing',
-    rect: 'Rectangle',
-    ellipse: 'Ellipse',
-    line: 'Line',
-    arrow: 'Arrow',
-    note: 'Note',
-  };
   return (
-    <Section title={titles[object.kind === 'text' ? 'text' : object.annot.type]!}>
+    <Section title={TITLES[object.kind === 'text' ? 'text' : object.annot.type]!}>
       {body}
       <button
         type="button"
         onClick={() => {
           select(null);
-          void commit(annotOpFor(object, 'delete'));
+          void updateObject(object.id, () => null);
         }}
         className="text-sm font-medium text-red-700 hover:text-red-800"
       >
@@ -367,7 +441,7 @@ export function PropertiesPanel() {
   const selectedId = useTools((s) => s.selectedId);
   const shape = useTools((s) => s.shape);
   const ink = useTools((s) => s.ink);
-  const updateDraftSpec = useTools((s) => s.updateDraftSpec);
+  const updateDraftStyle = useTools((s) => s.updateDraftStyle);
   const setShapeStyle = useTools((s) => s.setShapeStyle);
   const setInkStyle = useTools((s) => s.setInkStyle);
   const selected = objects.find((o) => o.id === selectedId);
@@ -377,7 +451,7 @@ export function PropertiesPanel() {
   if (draft) {
     content = (
       <Section title="Text">
-        <TextControls style={draft.spec.style} onChange={(style) => updateDraftSpec({ style })} />
+        <TextControls style={draft.spec.style} onChange={updateDraftStyle} />
       </Section>
     );
   } else if (selected) {
