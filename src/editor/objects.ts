@@ -72,6 +72,21 @@ export function foldObjects(ops: readonly Op[]): Map<string, EditorObject> {
       case 'image.delete':
         objects.delete(op.id);
         break;
+      case 'redact':
+        // Whatever a redaction touched is gone for good: it must never be redrawn from the
+        // model (moving a redacted text would otherwise bring its words back).
+        for (const [id, o] of objects) {
+          const b = objectBounds(o);
+          const hit = op.areas.some(
+            (a) =>
+              a.page === o.page &&
+              a.rects.some(
+                (r) => b.x < r.x + r.w && b.x + b.w > r.x && b.y < r.y + r.h && b.y + b.h > r.y,
+              ),
+          );
+          if (hit) objects.delete(id);
+        }
+        break;
       case 'page.move':
       case 'page.delete':
       case 'page.insertBlank':

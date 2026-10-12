@@ -116,7 +116,27 @@ export type Op =
   | { kind: 'page.delete'; pages: number[] }
   | { kind: 'page.insertBlank'; at: number; width: number; height: number }
   /** Pages of a registered document (see EngineApi.registerDocument), inserted before `at`. */
-  | { kind: 'page.insertFrom'; at: number; source: string; pages: number[] };
+  | { kind: 'page.insertFrom'; at: number; source: string; pages: number[] }
+  /**
+   * True redaction (spec §6 Phase 6): everything under the rects is removed for good (text,
+   * image pixels, vector graphics, annotations, form-field values, replacement/alt text) and
+   * black boxes drawn. All areas, across pages, are one op (one undo step).
+   */
+  | { kind: 'redact'; areas: { page: number; rects: Rect[] }[] }
+  /**
+   * OCR (spec §6 Phase 7): an invisible text layer over a scanned page so it can be searched
+   * and selected. Each word is fitted to its recognised box.
+   */
+  | { kind: 'ocr.addLayer'; id: string; page: number; words: { text: string; bbox: Rect }[] };
+
+/** What a password-protected PDF allows without the permissions (owner) password. */
+export type Permissions = {
+  print: boolean;
+  copy: boolean;
+  edit: boolean;
+  annotate: boolean;
+  forms: boolean;
+};
 
 export type FieldType = 'text' | 'checkbox' | 'radio' | 'choice' | 'signature' | 'button';
 
@@ -136,4 +156,15 @@ export type FormField = {
 };
 
 /** Ops that get a checkpoint taken before them (redact, page delete; spec §3.3). */
-export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>(['page.delete']);
+export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>([
+  'page.delete',
+  'redact',
+]);
+
+/** A simplified, structured view of a page for Word export (spec §6 Phase 8). Points. */
+export type DocRun = { text: string; size: number; bold: boolean; italic: boolean; color: Color };
+export type DocBlock =
+  | { kind: 'paragraph'; align: 'left' | 'center' | 'right'; runs: DocRun[]; spaceBefore: number }
+  | { kind: 'image'; png: Uint8Array; width: number; height: number }
+  | { kind: 'table'; rows: DocRun[][][] };
+export type DocPage = { width: number; height: number; blocks: DocBlock[] };

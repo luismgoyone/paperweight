@@ -1,4 +1,5 @@
 import type {
+  DocPage,
   FormField,
   Op,
   OpenResult,
@@ -19,6 +20,9 @@ export interface EngineApi {
   render(page: number, scale: number): Promise<ImageBitmap>;
   search(needle: string): Promise<SearchHit[]>;
   textRuns(page: number): Promise<TextRun[]>;
+  hasImages(page: number): Promise<boolean>;
+  /** A structured, best-effort reading of the pages for Word export (spec §6 Phase 8). */
+  documentModel(): Promise<DocPage[]>;
   fields(page: number): Promise<FormField[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
   save(options?: SaveOptions): Promise<Uint8Array>;
@@ -29,6 +33,8 @@ export interface EngineApi {
   registerDocument(key: string, bytes: Uint8Array, password?: string): Promise<RegisterResult>;
   /** Which font an edited text object is drawn in (for the substitution notice, spec §4). */
   textEditInfo(id: string): Promise<TextEditInfo | null>;
+  /** A smaller copy of the current document (spec §6 Phase 6); the document is unchanged. */
+  compress(options: { dpi: number }): Promise<{ bytes: Uint8Array; before: number; after: number }>;
   /** Forgets registered documents except these keys. */
   retainDocuments(keys: string[]): Promise<void>;
   /** A new PDF of these pages of the current document (extract / split). */

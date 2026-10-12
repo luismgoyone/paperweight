@@ -1,5 +1,6 @@
 import { useState, type RefObject } from 'react';
 import { useEditor } from '../editor/store';
+import { useTools } from '../editor/tools';
 import { ChevronDownIcon, ChevronUpIcon, SearchIcon } from './icons';
 
 export function SearchBar({ inputRef }: { inputRef: RefObject<HTMLInputElement> }) {
@@ -51,6 +52,27 @@ export function SearchBar({ inputRef }: { inputRef: RefObject<HTMLInputElement> 
       >
         {summary}
       </span>
+      {search.hits.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            // Mark every match (a little padding so nothing peeks out), then review and apply.
+            const pad = 1;
+            useTools.getState().addRedactMarks(
+              search.hits.flatMap((h) =>
+                h.rects.map((r) => ({
+                  page: h.page,
+                  rect: { x: r.x - pad, y: r.y - pad, w: r.w + 2 * pad, h: r.h + 2 * pad },
+                })),
+              ),
+            );
+            useTools.getState().setTool('redact');
+          }}
+          className="text-xs font-medium whitespace-nowrap text-red-700 hover:text-red-800"
+        >
+          Redact all matches ({search.hits.length})
+        </button>
+      )}
       {search.hits.length > 1 && (
         <>
           <button
