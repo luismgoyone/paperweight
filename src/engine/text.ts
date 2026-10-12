@@ -53,7 +53,7 @@ export function textRuns(doc: mupdf.Document, pageIndex: number): TextRun[] {
 }
 
 /** A run plus the quads of its visible characters (for removing exactly those glyphs). */
-export type RunGlyphs = { run: TextRun; quads: mupdf.Quad[] };
+export type RunGlyphs = { run: TextRun; quads: mupdf.Quad[]; origins: mupdf.Point[] };
 
 export function runsWithGlyphs(doc: mupdf.Document, pageIndex: number): RunGlyphs[] {
   const page = doc.loadPage(pageIndex);
@@ -61,7 +61,13 @@ export function runsWithGlyphs(doc: mupdf.Document, pageIndex: number): RunGlyph
   const runs: RunGlyphs[] = [];
   const push = (segment: Char[]) => {
     const run = charsToRun(segment);
-    if (run) runs.push({ run, quads: segment.filter((ch) => ch.c.trim()).map((ch) => ch.quad) });
+    const visible = segment.filter((ch) => ch.c.trim());
+    if (run)
+      runs.push({
+        run,
+        quads: visible.map((ch) => ch.quad),
+        origins: visible.map((ch) => ch.origin),
+      });
   };
   let line: Char[] = [];
   const flush = () => {

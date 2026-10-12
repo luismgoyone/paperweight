@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import * as mupdf from 'mupdf';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { EngineSession } from '../../src/engine/document';
+import { matchingEmc } from '../../src/engine/ops/content';
 import { registerFont } from '../../src/engine/fonts';
 import { textRuns } from '../../src/engine/text';
 import { ALL_FONTS, fontFile, fontId } from '../../src/shared/fonts';
@@ -68,5 +69,16 @@ describe('added objects survive the page being rewritten by a redaction', () => 
     expect(texts()).toContain('Alpha 2');
     expect(texts()).not.toContain('Beta');
     expect(texts()).toContain('INVOICE');
+  });
+});
+
+describe('matchingEmc', () => {
+  it('ignores EMC inside literal and hex strings, and nested sequences', () => {
+    const body = 'BT ( EMC \\) EMC) Tj <454D43> Tj ET /X <</A 1>> BDC (x) Tj EMC q Q EMC trailing';
+    const end = matchingEmc(body, 0);
+    expect(body.slice(0, end)).toMatch(/q Q EMC$/);
+  });
+  it('returns -1 when unbalanced', () => {
+    expect(matchingEmc('BT (abc) Tj ET', 0)).toBe(-1);
   });
 });

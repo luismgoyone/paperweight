@@ -229,15 +229,14 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         p.y <= r.bbox.y + r.bbox.h + pad,
     );
     if (!run) return null;
+    // Text the user added or already edited is drawn in its real font, which can be wider than
+    // the box measured with the bundled one: treat any substantial overlap as ours.
     const ours = pageObjects.some((o) => {
+      if (o.kind !== 'text') return false;
       const b = objectBounds(o);
-      return (
-        o.kind === 'text' &&
-        run.bbox.x >= b.x - 1 &&
-        run.bbox.x + run.bbox.w <= b.x + b.w + 1 &&
-        run.bbox.y >= b.y - 2 &&
-        run.bbox.y + run.bbox.h <= b.y + b.h + 2
-      );
+      const w = Math.min(run.bbox.x + run.bbox.w, b.x + b.w) - Math.max(run.bbox.x, b.x);
+      const h = Math.min(run.bbox.y + run.bbox.h, b.y + b.h) - Math.max(run.bbox.y, b.y);
+      return w > 0 && h > 0 && w * h >= 0.3 * run.bbox.w * run.bbox.h;
     });
     return ours ? null : run;
   };

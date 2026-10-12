@@ -52,7 +52,10 @@ export function foldObjects(ops: readonly Op[]): Map<string, EditorObject> {
       case 'text.add':
       case 'text.update':
       case 'text.edit': // edited existing text becomes an editable text object
-        objects.set(op.id, { id: op.id, page: op.page, kind: 'text', spec: op.spec });
+        // Emptied text draws nothing; it isn't an object the user can select.
+        if (op.spec.text.trim())
+          objects.set(op.id, { id: op.id, page: op.page, kind: 'text', spec: op.spec });
+        else objects.delete(op.id);
         break;
       case 'image.add':
       case 'image.update':

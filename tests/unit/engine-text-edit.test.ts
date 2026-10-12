@@ -151,3 +151,56 @@ describe('text.edit with a subset font (spec §4 cases 1 and 2)', () => {
 });
 
 void (0 as unknown as Rect);
+
+describe('text.edit never touches neighbouring text', () => {
+  /** Three 12pt lines set at 11pt leading (tighter than the font size). */
+  function tightLeading(fontName: string): Uint8Array {
+    const doc = new mupdf.PDFDocument();
+    const font = doc.addSimpleFont(new mupdf.Font(fontName));
+    const lines = ['Above line text', 'Target run', 'Below gjpqy line'];
+    const content = lines
+      .map((l, i) => `BT /F1 12 Tf 72 ${700 - i * 11} Td (${l}) Tj ET`)
+      .join('\n');
+    doc.insertPage(
+      -1,
+      doc.addPage([0, 0, 612, 792], 0, doc.addObject({ Font: { F1: font } }), content),
+    );
+    return doc.saveToBuffer('').asUint8Array().slice();
+  }
+
+  it.each(['Helvetica', 'Times-Roman'])(
+    'keeps the lines above and below intact (%s)',
+    (fontName) => {
+      const s = new EngineSession();
+      s.open(tightLeading(fontName));
+      const target = textRuns(s.doc, 0).find((r) => r.text === 'Target run')!;
+      s.setOps([editOp('e1', target, 'Edited run', 'left')]);
+      const texts = textRuns(s.doc, 0).map((r) => r.text);
+      expect(texts).toContain('Above line text');
+      expect(texts).toContain('Below gjpqy line');
+      expect(texts).toContain('Edited run');
+      expect(texts).not.toContain('Target run');
+    },
+  );
+});
+
+describe('invisible text (OCR layer over a scan)', () => {
+  it('is refused instead of drawing visible text over the scan', () => {
+    const doc = new mupdf.PDFDocument();
+    const font = doc.addSimpleFont(new mupdf.Font('Helvetica'));
+    doc.insertPage(
+      -1,
+      doc.addPage(
+        [0, 0, 612, 792],
+        0,
+        doc.addObject({ Font: { F1: font } }),
+        'BT 3 Tr /F1 12 Tf 72 700 Td (Scanned words) Tj ET',
+      ),
+    );
+    const s = new EngineSession();
+    s.open(doc.saveToBuffer('').asUint8Array().slice());
+    const run = textRuns(s.doc, 0).find((r) => r.text === 'Scanned words')!;
+    expect(run).toBeDefined();
+    expect(() => s.setOps([editOp('e1', run, 'Changed', 'left')])).toThrow(/invisible/);
+  });
+});

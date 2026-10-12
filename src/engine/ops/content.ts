@@ -74,6 +74,42 @@ function markerPattern(id: string): RegExp {
 type Section = { stream: number; text: string; start: number; end: number };
 
 /**
+ * Index just past the EMC that closes a marked-content sequence opened before `from`, or -1.
+ * Skips literal `(...)` and hex `<...>` strings: after a redaction MuPDF may re-write our hex
+ * glyph strings as literal strings, whose bytes could spell "EMC".
+ */
+export function matchingEmc(text: string, from: number): number {
+  let depth = 0;
+  for (let i = from; i < text.length; i++) {
+    const c = text[i];
+    if (c === '(') {
+      for (let nest = 1, j = i + 1; j < text.length; j++) {
+        if (text[j] === '\\') j++;
+        else if (text[j] === '(') nest++;
+        else if (text[j] === ')' && --nest === 0) {
+          i = j;
+          break;
+        }
+      }
+    } else if (c === '<' && text[i + 1] !== '<') {
+      const close = text.indexOf('>', i);
+      if (close < 0) return -1;
+      i = close;
+    } else if (c === '<' || c === '>') {
+      i++; // dictionary delimiters << >>
+    } else if (/[BE]/.test(c!) && !/[\w]/.test(text[i - 1] ?? ' ')) {
+      const word = /^(BDC|BMC|EMC)(?![\w])/.exec(text.slice(i, i + 4));
+      if (word) {
+        if (word[1] !== 'EMC') depth++;
+        else if (depth-- === 0) return i + 3;
+        i += 2;
+      }
+    }
+  }
+  return -1;
+}
+
+/**
  * Finds an object's marked-content section in any of the page's content streams: from its
  * marker to the matching EMC. Objects are addressed by section, not by stream, because
  * redaction merges all of a page's streams into one.
@@ -84,15 +120,8 @@ function findSection(contents: mupdf.PDFObject, id: string): Section | null {
     const text = streamText(contents.get(i));
     const m = pattern.exec(text);
     if (!m) continue;
-    // Our sections hold only our own operators (hex strings, names), so counting marked-content
-    // operators is enough to find the matching EMC.
-    const ops = /\b(BDC|BMC|EMC)\b/g;
-    ops.lastIndex = m.index + m[0].length;
-    let depth = 0;
-    for (let op = ops.exec(text); op; op = ops.exec(text)) {
-      if (op[1] !== 'EMC') depth++;
-      else if (depth-- === 0) return { stream: i, text, start: m.index, end: op.index + 3 };
-    }
+    const end = matchingEmc(text, m.index + m[0].length);
+    if (end >= 0) return { stream: i, text, start: m.index, end };
     return null; // unbalanced: treat as missing rather than guess
   }
   return null;
@@ -113,6 +142,17 @@ function pageResources(doc: mupdf.PDFDocument, pageObj: mupdf.PDFObject): mupdf.
     res = copy;
   }
   return res.resolve();
+}
+
+/** The page's /Resources/<category>/<name>, or null. */
+export function findResource(
+  doc: mupdf.PDFDocument,
+  page: mupdf.PDFPage,
+  category: 'Font' | 'XObject',
+  name: string,
+): mupdf.PDFObject | null {
+  const found = pageResources(doc, page.getObject()).get(category, name);
+  return found.isNull() ? null : found;
 }
 
 /** Puts `create()` into the page's /Resources/<category> under `name` unless already there. */

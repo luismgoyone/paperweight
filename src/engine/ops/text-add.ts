@@ -2,7 +2,7 @@ import type * as mupdf from 'mupdf';
 import { LINE_HEIGHT, firstBaselineOffset, fontId, type FontFamily } from '../../shared/fonts';
 import type { Op, TextSpec } from '../../shared/types';
 import { getFont } from '../fonts';
-import { ensureResource, fmt, pageSpaceCm, writeObjectStream } from './content';
+import { ensureResource, findResource, fmt, pageSpaceCm, writeObjectStream } from './content';
 
 // Text drawn into the page content (added text, spec §6 Phase 2; edited text, Phase 5) as a
 // tagged section; see content.ts.
@@ -50,7 +50,12 @@ function original(id: string, o: OriginalFont): DrawFont {
       : undefined,
     // Glyphs the page already draws with this font, else the font's own lookup (subset fonts
     // often have no usable cmap).
-    glyph: (cp) => o.glyphs.get(cp) ?? o.font.encodeCharacter(cp),
+    // The font's own Unicode lookup when it has one; else the glyphs the page already draws
+    // with it (subset fonts often have no usable cmap).
+    glyph: (cp) => {
+      const gid = o.font.encodeCharacter(cp);
+      return gid > 0 ? gid : (o.glyphs.get(cp) ?? 0);
+    },
   };
 }
 
@@ -58,23 +63,27 @@ const canDraw = (f: DrawFont, text: string) =>
   [...text.replace(/\n/g, '')].every((ch) => f.glyph(ch.codePointAt(0)!) > 0);
 
 /** Spec §4: the run's own font when it has every glyph, otherwise the bundled family. */
+function substituted(id: string, spec: TextSpec): void {
+  editInfo.set(id, {
+    fontName: spec.style.original!.fontName,
+    usedOriginal: false,
+    substitute: spec.style.family,
+  });
+}
+
+/** Spec §4: the run's own font when it has every glyph, otherwise the bundled family. */
 function chooseFont(id: string, spec: TextSpec): DrawFont {
-  const o = spec.style.original ? originals.get(id) : undefined;
+  if (!spec.style.original) return bundled(spec);
+  const o = originals.get(id);
   if (o) {
     const candidate = original(id, o);
-    const ok = canDraw(candidate, spec.text);
-    editInfo.set(
-      id,
-      ok
-        ? { fontName: spec.style.original!.fontName, usedOriginal: true }
-        : {
-            fontName: spec.style.original!.fontName,
-            usedOriginal: false,
-            substitute: spec.style.family,
-          },
-    );
-    if (ok) return candidate;
+    if (canDraw(candidate, spec.text)) {
+      editInfo.set(id, { fontName: spec.style.original.fontName, usedOriginal: true });
+      return candidate;
+    }
   }
+  // Never silent (spec §4): the UI shows "Substituted: X → Y".
+  substituted(id, spec);
   return bundled(spec);
 }
 
@@ -140,24 +149,43 @@ function buildContent(page: mupdf.PDFPage, f: DrawFont, spec: TextSpec): string 
  * Builds the content for a text object. Throws (before anything changes) if the chosen font
  * can't draw a character. Call `commit` to write it.
  */
+function embed(doc: mupdf.PDFDocument, f: DrawFont): mupdf.PDFObject {
+  const ref = doc.addFont(f.font);
+  // Keep the text extractable (copy, search, screen readers) even when the font program has
+  // no usable cmap: map our glyph ids back to Unicode explicitly.
+  if (f.toUnicode?.size)
+    ref.resolve().put('ToUnicode', doc.addStream(toUnicodeCMap(f.toUnicode), {}));
+  return ref;
+}
+
+/**
+ * Chooses and embeds the font and builds the content for a text object. Throws (before the
+ * page content changes) if no font can draw the text. Call `commit` to write it.
+ */
 export function prepareText(
   doc: mupdf.PDFDocument,
   page: mupdf.PDFPage,
   id: string,
   spec: TextSpec,
 ): { commit(kind: 'add' | 'update'): void } {
-  const f = chooseFont(id, spec);
+  let f = chooseFont(id, spec);
+  // Create the font object now, so a font that can't be re-embedded (e.g. Type3) falls back to
+  // the bundled family before anything changes. It's attached to the page on commit: redaction
+  // (text edits) drops page resources the content doesn't use yet.
+  const existing = (d: DrawFont) => findResource(doc, page, 'Font', d.resource);
+  let fontObject: mupdf.PDFObject;
+  try {
+    fontObject = existing(f) ?? embed(doc, f);
+  } catch (e) {
+    if (!spec.style.original) throw e;
+    substituted(id, spec);
+    f = bundled(spec);
+    fontObject = existing(f) ?? embed(doc, f);
+  }
   const content = buildContent(page, f, spec);
   return {
     commit(kind) {
-      ensureResource(doc, page, 'Font', f.resource, () => {
-        const ref = doc.addFont(f.font);
-        // Keep the text extractable (copy, search, screen readers) even when the font program
-        // has no usable cmap: map our glyph ids back to Unicode explicitly.
-        if (f.toUnicode?.size)
-          ref.resolve().put('ToUnicode', doc.addStream(toUnicodeCMap(f.toUnicode), {}));
-        return ref;
-      });
+      ensureResource(doc, page, 'Font', f.resource, () => fontObject);
       writeObjectStream(doc, page, { kind, id, content });
     },
   };
