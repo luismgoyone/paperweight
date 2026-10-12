@@ -119,9 +119,10 @@ export type Op =
   | { kind: 'page.insertFrom'; at: number; source: string; pages: number[] }
   /**
    * True redaction (spec §6 Phase 6): everything under the rects is removed for good (text,
-   * image pixels, vector graphics, annotations and form-field values) and black boxes drawn.
+   * image pixels, vector graphics, annotations, form-field values, replacement/alt text) and
+   * black boxes drawn. All areas, across pages, are one op (one undo step).
    */
-  | { kind: 'redact'; page: number; rects: Rect[] };
+  | { kind: 'redact'; areas: { page: number; rects: Rect[] }[] };
 
 /** What a password-protected PDF allows without the permissions (owner) password. */
 export type Permissions = {

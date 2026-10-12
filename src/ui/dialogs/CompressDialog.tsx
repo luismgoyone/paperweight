@@ -23,7 +23,8 @@ export function CompressDialog({ onClose }: { onClose: () => void }) {
     before: number;
     after: number;
   } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ dpi: number; message: string } | null>(null);
+  const error = failure?.dpi === dpi ? failure.message : null;
   const titleId = useId();
   const current = result?.dpi === dpi ? result : null;
 
@@ -31,7 +32,7 @@ export function CompressDialog({ onClose }: { onClose: () => void }) {
     let live = true;
     compress(dpi).then(
       (r) => live && setResult({ dpi, ...r }),
-      (e) => live && setError(e instanceof Error ? e.message : String(e)),
+      (e) => live && setFailure({ dpi, message: e instanceof Error ? e.message : String(e) }),
     );
     return () => {
       live = false;

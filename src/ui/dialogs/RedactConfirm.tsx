@@ -24,8 +24,9 @@ export function RedactConfirm({
         </h2>
         <p className="mt-3 text-sm text-slate-600">
           This permanently removes the marked content from the PDF: text, images and drawings under
-          each area, plus any notes or form fields there. Black boxes replace it. You can undo until
-          you close the tab, but the downloaded file will not contain it.
+          each area, plus any notes or form fields there, and the page&apos;s hidden accessibility
+          text. Black boxes replace it. You can undo until you close the tab, but the downloaded
+          file will not contain it. (The document&apos;s title and author are not changed.)
         </p>
         <div className="mt-6 flex justify-end gap-2">
           <button

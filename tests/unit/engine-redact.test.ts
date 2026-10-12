@@ -32,7 +32,7 @@ const amountRow = { x: 515, y: 186, w: 30, h: 13 };
 describe('redact', () => {
   it('removes the text under the area for good and keeps the rest', () => {
     const s = session(fixture('invoice.pdf'));
-    s.setOps([{ kind: 'redact', page: 0, rects: [amountRow] }]);
+    s.setOps([{ kind: 'redact', areas: [{ page: 0, rects: [amountRow] }] }]);
     const saved = new mupdf.PDFDocument(s.save());
     const runs = textRuns(saved, 0);
     expect(runs.filter((r) => r.text === '$26')).toHaveLength(1); // only the Rate column's
@@ -45,7 +45,7 @@ describe('redact', () => {
 
   it('draws a black box over the area', () => {
     const s = session(fixture('invoice.pdf'));
-    s.setOps([{ kind: 'redact', page: 0, rects: [amountRow] }]);
+    s.setOps([{ kind: 'redact', areas: [{ page: 0, rects: [amountRow] }] }]);
     const { pixels, width } = renderPageRGBA(new mupdf.PDFDocument(s.save()), 0, 1);
     const i = (192 * width + 530) * 4;
     expect([...pixels.slice(i, i + 3)]).toEqual([0, 0, 0]);
@@ -68,7 +68,7 @@ describe('redact', () => {
       ),
     );
     const s = session(doc.saveToBuffer('').asUint8Array().slice());
-    s.setOps([{ kind: 'redact', page: 0, rects: [{ x: 0, y: 0, w: 100, h: 200 }] }]);
+    s.setOps([{ kind: 'redact', areas: [{ page: 0, rects: [{ x: 0, y: 0, w: 100, h: 200 }] }] }]);
     // Even with the black box gone (rendering only the image), the left half has no red left.
     const saved = new mupdf.PDFDocument(s.save());
     // Redaction may rename the image resource: take the page's (only) image.
@@ -97,7 +97,7 @@ describe('redact', () => {
         page: 0,
         annot: { type: 'note', at: { x: 200, y: 60 }, text: 'secret note', color: [1, 1, 0] },
       },
-      { kind: 'redact', page: 0, rects: [{ x: 170, y: 55, w: 240, h: 30 }] },
+      { kind: 'redact', areas: [{ page: 0, rects: [{ x: 170, y: 55, w: 240, h: 30 }] }] },
     ]);
     const saved = new mupdf.PDFDocument(s.save());
     const bytes = new TextDecoder('latin1').decode(s.save());
@@ -132,7 +132,7 @@ describe('redact', () => {
     };
     const ops: Op[] = [
       { kind: 'text.add', id: 't', page: 0, spec },
-      { kind: 'redact', page: 0, rects: [amountRow] },
+      { kind: 'redact', areas: [{ page: 0, rects: [amountRow] }] },
       { kind: 'text.update', id: 't', page: 0, spec: { ...spec, text: 'Updated' } },
     ];
     s.setOps(ops);
@@ -141,5 +141,31 @@ describe('redact', () => {
     expect(textRuns(s.doc, 0).filter((r) => r.text === '$26')).toHaveLength(2);
     // The checkpoint taken just before the redaction (after op 1) is still valid.
     expect(s.checkpointIndices).toEqual([1]);
+  });
+});
+
+describe('redaction leaves no hidden copies', () => {
+  it('removes ActualText/Alt replacement text on the page', () => {
+    const doc = new mupdf.PDFDocument();
+    const font = doc.addSimpleFont(new mupdf.Font('Helvetica'));
+    const content =
+      '/Span <</ActualText (ACTUALSECRET)>> BDC BT /F1 12 Tf 72 700 Td (PAGESECRET) Tj ET EMC\n' +
+      '/Span <</Alt (ALTSECRET)>> BDC BT /F1 12 Tf 72 600 Td (Kept text) Tj ET EMC';
+    doc.insertPage(
+      -1,
+      doc.addPage([0, 0, 612, 792], 0, doc.addObject({ Font: { F1: font } }), content),
+    );
+    const s = session(doc.saveToBuffer('').asUint8Array().slice());
+    s.setOps([{ kind: 'redact', areas: [{ page: 0, rects: [{ x: 70, y: 80, w: 120, h: 16 }] }] }]);
+    const saved = new mupdf.PDFDocument(s.save());
+    let all = '';
+    for (let i = 1; i < saved.countObjects(); i++) {
+      const o = saved.newIndirect(i);
+      all += o.isStream() ? o.readStream().asString() : o.resolve().toString();
+    }
+    expect(all).not.toContain('PAGESECRET');
+    expect(all).not.toContain('ACTUALSECRET');
+    expect(all).not.toContain('ALTSECRET');
+    expect(textRuns(saved, 0).map((r) => r.text)).toContain('Kept text');
   });
 });

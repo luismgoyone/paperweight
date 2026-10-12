@@ -582,9 +582,8 @@ function RedactionSection() {
           onCancel={() => setConfirming(false)}
           onConfirm={() => {
             setConfirming(false);
-            const applying = [...marks];
-            clear();
-            void applyRedactions(applying);
+            // Marks are cleared once the redaction has been applied.
+            void applyRedactions([...marks]);
           }}
         />
       )}

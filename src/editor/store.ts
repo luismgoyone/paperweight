@@ -189,6 +189,8 @@ function messageOf(e: unknown): string {
 export const useEditor = create<EditorState>()((set, get) => {
   // Page changes invalidate page-indexed UI state.
   const afterPageChange = () => {
+    // Marks are page-indexed: after pages move they'd point at the wrong content.
+    useTools.getState().clearRedactMarks();
     const last = get().pages.length - 1;
     set({ search: EMPTY_SEARCH, currentPage: Math.min(get().currentPage, Math.max(0, last)) });
   };
@@ -327,6 +329,7 @@ export const useEditor = create<EditorState>()((set, get) => {
         source = { ...file, password };
         pending = null;
         history.reset();
+        useTools.getState().clearRedactMarks();
         {
           // Images placed in the previous document are no longer needed; session signatures are.
           const keep = useTools.getState().signatures.map((s) => s.key);
@@ -480,16 +483,20 @@ export const useEditor = create<EditorState>()((set, get) => {
     applyRedactions(marks) {
       const byPage = new Map<number, Rect[]>();
       for (const m of marks) byPage.set(m.page, [...(byPage.get(m.page) ?? []), m.rect]);
-      const ops: Op[] = [...byPage].map(([page, rects]) => ({ kind: 'redact', page, rects }));
-      // All pages in one step: a download can't slip in between and save a half-redacted file.
+      // One op for every page: a single undo step, and a download can't slip in between pages
+      // and save a half-redacted file.
+      const op: Op = {
+        kind: 'redact',
+        areas: [...byPage].map(([page, rects]) => ({ page, rects })),
+      };
       return exclusive(async () => {
-        for (const op of ops) history.push(op);
+        history.push(op);
         try {
           await sync();
+          useTools.getState().clearRedactMarks();
         } catch (e) {
-          for (let i = 0; i < ops.length; i++) history.rejectLast();
+          history.rejectLast();
           set(historyFlags());
-          await sync().catch(() => undefined);
           get().showToast(`The redactions could not be applied: ${messageOf(e)}`);
         }
       });

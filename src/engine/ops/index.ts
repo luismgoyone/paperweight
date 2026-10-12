@@ -62,5 +62,6 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
 /** Pages whose rendering an op changes, or 'all' when the op isn't tied to one page. */
 export function pagesTouched(op: Op): number[] | 'all' {
   if ('page' in op) return [op.page];
+  if (op.kind === 'redact') return op.areas.map((a) => a.page);
   return op.kind === 'form.set' || op.kind.startsWith('page.') ? 'all' : [];
 }

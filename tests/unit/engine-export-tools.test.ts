@@ -153,3 +153,27 @@ describe('passwords on export', () => {
     ).toThrow(/comma/);
   });
 });
+
+describe('compress keeps enough detail in both directions', () => {
+  it('sizes an unevenly stretched image by its larger displayed side', async () => {
+    const { downsampleImages } = await import('../../src/engine/compress');
+    const doc = new mupdf.PDFDocument();
+    const pix = new mupdf.Pixmap(mupdf.ColorSpace.DeviceRGB, [0, 0, 2000, 2000], false);
+    const px = pix.getPixels();
+    for (let i = 0; i < px.length; i++) px[i] = (i * 31) % 251;
+    const img = doc.addImage(new mupdf.Image(pix));
+    // Shown 50 pt wide but 500 pt tall: at 72 dpi it needs 500 px vertically.
+    doc.insertPage(
+      -1,
+      doc.addPage(
+        [0, 0, 612, 792],
+        0,
+        doc.addObject({ XObject: { Im: img } }),
+        'q 50 0 0 500 72 100 cm /Im Do Q',
+      ),
+    );
+    downsampleImages(doc, 72);
+    const obj = doc.findPage(0).get('Resources', 'XObject', 'Im').resolve();
+    expect(obj.get('Height').asNumber()).toBeGreaterThanOrEqual(500);
+  });
+});
