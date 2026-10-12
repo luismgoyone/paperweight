@@ -1,5 +1,6 @@
 import { useEditor } from '../editor/store';
 import { FileIcon, ShieldIcon } from './icons';
+import { SOURCE_URL } from './TopBar';
 
 export function EmptyState({ onOpen }: { onOpen: () => void }) {
   const error = useEditor((s) => s.error);
@@ -23,6 +24,14 @@ export function EmptyState({ onOpen }: { onOpen: () => void }) {
           <ShieldIcon className="h-4 w-4 text-emerald-600" />
           Your file is opened in this browser tab and never uploaded.
         </p>
+        <a
+          href={SOURCE_URL}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="mt-3 inline-block text-xs text-neutral-500 underline-offset-2 hover:text-neutral-800 hover:underline"
+        >
+          Source code (AGPL)
+        </a>
         {error && (
           <p
             role="alert"

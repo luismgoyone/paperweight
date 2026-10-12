@@ -173,6 +173,58 @@ function ShapePreview({ annot, zoom }: { annot: AnnotSpec; zoom: number }) {
   }
 }
 
+/**
+ * Live feedback while text or an image is moved, resized or nudged. Both are part of the
+ * rendered page, so until the op commits the page still shows them where they were: copy
+ * their pixels from the page canvas to the new box and fade the old spot.
+ */
+function MovePreview({ from, to, zoom }: { from: Rect; to: Rect; zoom: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const source = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Snapshot the page once per gesture: it re-renders only after the drop.
+    source.current ??= el.parentElement?.parentElement?.querySelector('canvas') ?? null;
+    const page = source.current;
+    if (!page || !page.width) return;
+    const k = page.width / page.getBoundingClientRect().width; // canvas pixels per CSS pixel
+    const dpr = window.devicePixelRatio || 1;
+    el.width = Math.max(1, Math.round(to.w * zoom * dpr));
+    el.height = Math.max(1, Math.round(to.h * zoom * dpr));
+    el.getContext('2d')?.drawImage(
+      page,
+      from.x * zoom * k,
+      from.y * zoom * k,
+      from.w * zoom * k,
+      from.h * zoom * k,
+      0,
+      0,
+      el.width,
+      el.height,
+    );
+  }, [from.x, from.y, from.w, from.h, to.w, to.h, zoom]);
+  return (
+    <>
+      <div
+        className="pointer-events-none absolute bg-white/70"
+        style={{
+          left: from.x * zoom,
+          top: from.y * zoom,
+          width: from.w * zoom,
+          height: from.h * zoom,
+        }}
+      />
+      <canvas
+        ref={ref}
+        data-testid="move-preview"
+        className="pointer-events-none absolute"
+        style={{ left: to.x * zoom, top: to.y * zoom, width: to.w * zoom, height: to.h * zoom }}
+      />
+    </>
+  );
+}
+
 export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
   const objects = useEditor((s) => s.objects);
   const commit = useEditor((s) => s.commit);
@@ -639,6 +691,9 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         }
       }}
     >
+      {selected && moving && moving.kind !== 'annot' && (
+        <MovePreview from={objectBounds(selected)} to={objectBounds(moving)} zoom={zoom} />
+      )}
       <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
         <defs>
           <marker

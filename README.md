@@ -185,7 +185,7 @@ UI mockups made with Google Stitch live in [`docs/design/`](docs/design/).
 ## License
 
 [AGPL-3.0-or-later](LICENSE), because the PDF engine, [MuPDF.js](https://mupdf.com/), is AGPL.
-The full source is linked from the app ("Source code").
+The full source is linked from the app ("Source code (AGPL)" on the start screen and in the download menu).
 
 ### Third-party licenses
 

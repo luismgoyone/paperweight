@@ -225,6 +225,17 @@ function DownloadButton() {
               Protect, restrict, or remove a password
             </span>
           </button>
+          <div className="my-1 border-t border-slate-200" />
+          <a
+            role="menuitem"
+            href={SOURCE_URL}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="block w-full rounded-md px-3 py-2 text-left text-xs text-slate-500 hover:bg-slate-100"
+            onClick={() => setOpen(false)}
+          >
+            Source code (AGPL)
+          </a>
         </div>
       )}
       {dialog === 'compress' && <CompressDialog onClose={() => setDialog(null)} />}
@@ -295,14 +306,6 @@ export function TopBar({ searchInput }: { searchInput: RefObject<HTMLInputElemen
       )}
       <div className="ml-auto flex items-center gap-3">
         <PrivacyBadge />
-        <a
-          href={SOURCE_URL}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="text-xs text-neutral-500 underline-offset-2 hover:text-neutral-800 hover:underline"
-        >
-          Source code
-        </a>
         {ready && <DownloadButton />}
       </div>
     </header>
