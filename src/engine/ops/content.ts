@@ -62,12 +62,40 @@ function ensureWrapped(doc: mupdf.PDFDocument, contents: mupdf.PDFObject): void 
   contents.push(doc.addStream(WRAP_END, {}));
 }
 
-function findStream(contents: mupdf.PDFObject, id: string): number {
-  const needle = marker(id);
+/**
+ * Matches an object's opening marker however it was serialized: our own writer adds spaces,
+ * MuPDF's content filter (used by redaction) removes them.
+ */
+function markerPattern(id: string): RegExp {
+  marker(id); // validates the id
+  return new RegExp(`/${TAG}\\s*<<\\s*/Id\\s*\\(${id}\\)\\s*>>\\s*BDC`);
+}
+
+type Section = { stream: number; text: string; start: number; end: number };
+
+/**
+ * Finds an object's marked-content section in any of the page's content streams: from its
+ * marker to the matching EMC. Objects are addressed by section, not by stream, because
+ * redaction merges all of a page's streams into one.
+ */
+function findSection(contents: mupdf.PDFObject, id: string): Section | null {
+  const pattern = markerPattern(id);
   for (let i = 0; i < contents.length; i++) {
-    if (streamText(contents.get(i)).includes(needle)) return i;
+    const text = streamText(contents.get(i));
+    const m = pattern.exec(text);
+    if (!m) continue;
+    // Our sections hold only our own operators (hex strings, names), so counting marked-content
+    // operators is enough to find the matching EMC.
+    const ops = /\b(BDC|BMC|EMC)\b/g;
+    ops.lastIndex = m.index + m[0].length;
+    let depth = 0;
+    for (let op = ops.exec(text); op; op = ops.exec(text)) {
+      if (op[1] !== 'EMC') depth++;
+      else if (depth-- === 0) return { stream: i, text, start: m.index, end: op.index + 3 };
+    }
+    return null; // unbalanced: treat as missing rather than guess
   }
-  return -1;
+  return null;
 }
 
 /** Resolves the page /Resources dictionary, creating or copying an inherited one if needed. */
@@ -114,16 +142,18 @@ export function writeObjectStream(
   action: ObjectAction,
 ): void {
   const contents = contentsArray(doc, page.getObject());
-  const existing = findStream(contents, action.id);
-  if (action.kind === 'add' && existing >= 0)
+  const section = findSection(contents, action.id);
+  if (action.kind === 'add' && section) {
     throw new Error(`An object with id ${action.id} already exists`);
-  if (action.kind !== 'add' && existing < 0) throw new Error('That object no longer exists');
-  if (action.kind === 'delete') {
-    contents.delete(existing);
+  }
+  if (action.kind !== 'add' && !section) throw new Error('That object no longer exists');
+  const body = action.kind === 'delete' ? '' : `${marker(action.id)}\n${action.content}EMC\n`;
+  if (section) {
+    // Replace just this object's section; other objects may share the stream.
+    const next = section.text.slice(0, section.start) + body + section.text.slice(section.end);
+    contents.put(section.stream, doc.addStream(next, {}));
     return;
   }
   ensureWrapped(doc, contents);
-  const stream = doc.addStream(`${marker(action.id)}\n${action.content}EMC\n`, {});
-  if (action.kind === 'update') contents.put(findStream(contents, action.id), stream);
-  else contents.push(stream);
+  contents.push(doc.addStream(body, {}));
 }
