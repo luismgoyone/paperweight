@@ -35,6 +35,21 @@ describe('foldObjects', () => {
   });
 });
 
+describe('edited text', () => {
+  it('becomes a text object that later edits update', () => {
+    const objects = foldObjects([
+      {
+        kind: 'text.edit',
+        id: 'e',
+        page: 0,
+        target: { text: '$26', bbox: { x: 0, y: 0, w: 10, h: 10 } },
+        spec: text,
+      },
+    ]);
+    expect(objects.get('e')).toEqual({ id: 'e', page: 0, kind: 'text', spec: text });
+  });
+});
+
 describe('objectBounds', () => {
   it('pads strokes by half their width', () => {
     expect(objectBounds({ id: 'a', page: 0, kind: 'annot', annot: rect(10, 10) })).toEqual({

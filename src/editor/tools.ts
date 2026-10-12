@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Color, ImageAsset, TextSpec, TextStyle } from '../shared/types';
+import type { Color, ImageAsset, Rect, TextSpec, TextStyle } from '../shared/types';
 
 // Interaction state for the editing tools (spec §5). In-progress interactions live here and
 // become ops only on commit (spec §3.3).
@@ -7,6 +7,7 @@ import type { Color, ImageAsset, TextSpec, TextStyle } from '../shared/types';
 export type Tool =
   | 'select'
   | 'text'
+  | 'edit'
   | 'highlight'
   | 'underline'
   | 'strikeout'
@@ -28,6 +29,8 @@ export type TextDraft = {
   isNew: boolean;
   /** For existing text: the committed spec, so cancel and no-op closes change nothing. */
   original: TextSpec | null;
+  /** Set when editing a run of the PDF's own text (commit = text.edit). */
+  edit?: { target: { text: string; bbox: Rect } };
 };
 
 /** Arrow-key nudges accumulate here and become one op when the key is released. */
@@ -151,5 +154,6 @@ export const useTools = create<ToolsState>()((set, get) => ({
 export const TOOL_SHORTCUTS: Partial<Record<string, Tool>> = {
   v: 'select',
   t: 'text',
+  e: 'edit',
   h: 'highlight',
 };

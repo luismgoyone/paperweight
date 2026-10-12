@@ -48,7 +48,7 @@ export function useKeyboard(focusSearch: () => void) {
         void s.redo();
       } else if (!mod && !e.altKey && TOOL_SHORTCUTS[key]) {
         const tool = TOOL_SHORTCUTS[key]!;
-        if (tool !== 'text' || s.fontsReady) useTools.getState().setTool(tool);
+        if ((tool !== 'text' && tool !== 'edit') || s.fontsReady) useTools.getState().setTool(tool);
       } else if (e.key === 'Escape') {
         const tools = useTools.getState();
         if (tools.selectedId) tools.select(null);

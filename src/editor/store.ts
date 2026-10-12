@@ -15,6 +15,7 @@ import { newId } from './ids';
 import { createEngineClient, createSerialQueue, type EngineClient } from './engine-client';
 import { loadFonts } from './fonts';
 import { History } from './history';
+import type { TextEditInfo } from '../engine/ops/text-add';
 import { foldObjects, type EditorObject } from './objects';
 import { useTools } from './tools';
 import { objectOp } from './object-ops';
@@ -80,6 +81,8 @@ export type EditorState = {
   /** Existing text on a page (cached per page version). */
   getTextRuns(page: number): Promise<TextRun[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
+  /** Which font an edited text object uses (null for added text). */
+  getTextEditInfo(id: string): Promise<TextEditInfo | null>;
   /** Form widgets on a page with their current values. */
   getFields(page: number): Promise<FormField[]>;
   /** Inserts every page of a PDF before page `at` (merge). Asks for a password if needed. */
@@ -636,6 +639,10 @@ export const useEditor = create<EditorState>()((set, get) => {
       const { width, height } = await engineOrThrow().registerImage(key, bytes);
       images.set(key, bytes);
       return { key, bytes, width, height };
+    },
+
+    getTextEditInfo(id) {
+      return engineOrThrow().textEditInfo(id);
     },
 
     getFields(page) {

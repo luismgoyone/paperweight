@@ -3,6 +3,7 @@ import * as Comlink from 'comlink';
 import { E2E_CRASH, ENGINE_READY, type EngineApi } from './api';
 import { EngineSession } from './document';
 import { registerDocument, retainDocuments } from './documents';
+import { textEditInfo } from './ops/text-add';
 import { registerFont } from './fonts';
 import { listFields } from './forms';
 import { imageSize, registerImage, retainImages } from './images';
@@ -51,6 +52,9 @@ const api: EngineApi = {
   },
   async registerDocument(key, bytes, password) {
     return registerDocument(key, bytes, password);
+  },
+  async textEditInfo(id) {
+    return textEditInfo(id) ?? null;
   },
   async retainDocuments(keys) {
     retainDocuments(keys);

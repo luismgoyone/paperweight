@@ -5,8 +5,9 @@ A free PDF editor that runs entirely in your browser. **Files never leave your d
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.
 
-> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–4 (viewer, markup, add text,
-> signatures, forms, images, page management) are built; see the [Roadmap](#roadmap).
+> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–5 (viewer, markup, add text,
+> signatures, forms, images, page management, editing existing text) are built; see the
+> [Roadmap](#roadmap).
 
 ## Privacy guarantees
 
@@ -30,6 +31,17 @@ Referrer-Policy: no-referrer
 ```
 
 ## Features
+
+### Edit existing text (Phase 5)
+
+- **Edit text** (E): hover any line of the PDF's own text, click, type, press Enter. The change
+  is made in place: the old glyphs are removed (no white box) and the new text is drawn in the
+  **same font**, size, color and baseline. Numbers in a right-aligned column keep their right
+  edge, so `$26 → $31` on an invoice lines up exactly.
+- If the document's font doesn't contain a character you type (common with subset fonts), a
+  metric-compatible bundled font is used instead, and the properties panel says so
+  ("Substituted: Arial → Liberation Sans"). Substitution is never silent.
+- Edits are line-level: text doesn't reflow into neighbouring lines.
 
 ### Pages (Phase 4)
 
@@ -78,18 +90,18 @@ Referrer-Policy: no-referrer
 
 ## Keyboard shortcuts
 
-| Action                        | Shortcut                     |
-| ----------------------------- | ---------------------------- |
-| Undo / redo                   | ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y)   |
-| Download                      | ⌘S                           |
-| Search                        | ⌘F, then Enter / Shift+Enter |
-| Zoom in / out                 | ⌘= / ⌘-                      |
-| Next / previous page          | PageDown / PageUp            |
-| Select / Add text / Highlight | V / T / H                    |
-| Delete selection              | Delete                       |
-| Nudge selection               | Arrow keys (Shift: 10 pt)    |
-| Finish / cancel text          | ⌘Enter / Esc                 |
-| Move selected pages           | Alt+↑ / Alt+↓                |
+| Action                                    | Shortcut                     |
+| ----------------------------------------- | ---------------------------- |
+| Undo / redo                               | ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y)   |
+| Download                                  | ⌘S                           |
+| Search                                    | ⌘F, then Enter / Shift+Enter |
+| Zoom in / out                             | ⌘= / ⌘-                      |
+| Next / previous page                      | PageDown / PageUp            |
+| Select / Add text / Edit text / Highlight | V / T / E / H                |
+| Delete selection                          | Delete                       |
+| Nudge selection                           | Arrow keys (Shift: 10 pt)    |
+| Finish / cancel text                      | ⌘Enter / Esc                 |
+| Move selected pages                       | Alt+↑ / Alt+↓                |
 
 ## Architecture
 
@@ -131,7 +143,7 @@ UI mockups made with Google Stitch live in [`docs/design/`](docs/design/).
 - [x] **Phase 2: Markup and add text**: annotations, add text, alignment guides, flatten
 - [x] **Phase 3: Signatures, forms and images**
 - [x] **Phase 4: Page management**: reorder, rotate, delete, insert, merge, extract, split
-- [ ] Phase 5: Edit existing text in the same font
+- [x] **Phase 5: Edit existing text in the same font**
 - [ ] Phase 6: Redact, compress, passwords
 - [ ] Phase 7: OCR (Tesseract.js, self-hosted)
 - [ ] Phase 8: PDF → Word

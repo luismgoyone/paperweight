@@ -167,6 +167,13 @@ test('signing, inserting an image and filling a form stay on the device', async 
     .setInputFiles({ name: 'x.png', mimeType: 'image/png', buffer: Buffer.from(png) });
   await page.mouse.click(origin.x + 100, origin.y + 300);
 
+  // Phase 5: edit existing text in place ("Page 1" title at x 72, baseline 72).
+  await page.getByRole('button', { name: 'Edit text' }).click();
+  await page.mouse.click(origin.x + 90, origin.y + 64);
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Page One');
+  await page.keyboard.press('Enter');
+
   // Phase 4: rotate, insert another PDF, extract.
   await page.getByRole('button', { name: 'Rotate right' }).click();
   await page.getByTestId('insert-pdf-input').setInputFiles('tests/fixtures/simple.pdf');

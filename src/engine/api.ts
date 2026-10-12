@@ -10,6 +10,7 @@ import type {
 } from '../shared/types';
 import type { ChangedPages, SaveOptions } from './document';
 import type { RegisterResult } from './documents';
+import type { TextEditInfo } from './ops/text-add';
 
 /** The engine's Comlink surface (spec §3.2). Implemented in worker.ts. */
 export interface EngineApi {
@@ -26,6 +27,8 @@ export interface EngineApi {
   registerImage(key: string, bytes: Uint8Array): Promise<{ width: number; height: number }>;
   /** Makes another PDF available to `page.insertFrom` under `key`. */
   registerDocument(key: string, bytes: Uint8Array, password?: string): Promise<RegisterResult>;
+  /** Which font an edited text object is drawn in (for the substitution notice, spec §4). */
+  textEditInfo(id: string): Promise<TextEditInfo | null>;
   /** Forgets registered documents except these keys. */
   retainDocuments(keys: string[]): Promise<void>;
   /** A new PDF of these pages of the current document (extract / split). */

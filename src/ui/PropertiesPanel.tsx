@@ -159,6 +159,8 @@ function SizeField({ value, onCommit }: { value: number; onCommit: (v: number) =
   );
 }
 
+const ORIGINAL_FONT = '__original__';
+
 function TextControls({
   style,
   onChange,
@@ -174,9 +176,18 @@ function TextControls({
         <select
           aria-label="Font"
           className={`${input} w-40`}
-          value={style.family}
-          onChange={(e) => onChange({ family: e.target.value as FontFamily })}
+          value={style.original ? ORIGINAL_FONT : style.family}
+          onChange={(e) => {
+            if (e.target.value === ORIGINAL_FONT) return;
+            // Picking a bundled family replaces the document's own font (spec §4 case 3).
+            onChange({ family: e.target.value as FontFamily, original: undefined });
+          }}
         >
+          {style.original && (
+            <option value={ORIGINAL_FONT}>
+              {style.original.fontName.replace(/^[A-Z]{6}\+/, '')} (from PDF)
+            </option>
+          )}
           {FONT_FAMILIES.map((f) => (
             <option key={f}>{f}</option>
           ))}
@@ -337,6 +348,46 @@ function NoteText({ id, initial }: { id: string; initial: string }) {
   );
 }
 
+/**
+ * Spec §4: font substitution is never silent. Edited text says which font it's drawn in.
+ */
+function FontNotice({ id }: { id: string }) {
+  const getTextEditInfo = useEditor((s) => s.getTextEditInfo);
+  const revision = useEditor((s) => s.revision);
+  const [info, setInfo] = useState<Awaited<ReturnType<typeof getTextEditInfo>>>(null);
+  useEffect(() => {
+    let live = true;
+    getTextEditInfo(id).then(
+      (i) => live && setInfo(i),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [getTextEditInfo, id, revision]);
+  if (!info) return null;
+  const name = info.fontName.replace(/^[A-Z]{6}\+/, '');
+  return info.usedOriginal ? (
+    <p
+      data-testid="font-notice"
+      className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+    >
+      Same font as the document: {name}
+    </p>
+  ) : (
+    <p
+      data-testid="font-notice"
+      role="status"
+      className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900"
+    >
+      Substituted: {name} → {info.substitute}
+      <span className="block text-amber-800/80">
+        The original font in this PDF doesn't include every character you typed.
+      </span>
+    </p>
+  );
+}
+
 const TITLES: Record<string, string> = {
   text: 'Text',
   image: 'Image',
@@ -362,14 +413,19 @@ function SelectionControls({ object }: { object: EditorObject }) {
   let body: ReactNode;
   if (object.kind === 'text') {
     body = (
-      <TextControls
-        style={object.spec.style}
-        onChange={(patch) =>
-          void updateObject(object.id, (o) =>
-            o.kind === 'text' ? { ...o, spec: restyle(o.spec, { ...o.spec.style, ...patch }) } : o,
-          )
-        }
-      />
+      <>
+        {object.spec.style.original && <FontNotice id={object.id} />}
+        <TextControls
+          style={object.spec.style}
+          onChange={(patch) =>
+            void updateObject(object.id, (o) =>
+              o.kind === 'text'
+                ? { ...o, spec: restyle(o.spec, { ...o.spec.style, ...patch }) }
+                : o,
+            )
+          }
+        />
+      </>
     );
   } else if (object.kind === 'image') {
     body = (

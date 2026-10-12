@@ -33,6 +33,17 @@ const GROUPS: ToolDef[][] = [
   ],
   [
     {
+      tool: 'edit',
+      label: 'Edit text',
+      shortcut: 'E',
+      icon: svg(
+        <>
+          <path d="M4 7V5h10v2M9 5v12M6 17h6" />
+          <path d="M14 19l6-6-2-2-6 6v2z" />
+        </>,
+      ),
+    },
+    {
       tool: 'text',
       label: 'Add text',
       shortcut: 'T',
@@ -221,14 +232,14 @@ export function Toolbar() {
               aria-label={t.label}
               aria-pressed={tool === t.tool}
               title={
-                t.tool === 'text' && !fontsReady
+                (t.tool === 'text' || t.tool === 'edit') && !fontsReady
                   ? 'Loading fonts…'
                   : t.shortcut
                     ? `${t.label} (${t.shortcut})`
                     : t.label
               }
               // Text needs the bundled fonts, which load right after the page.
-              disabled={t.tool === 'text' && !fontsReady}
+              disabled={(t.tool === 'text' || t.tool === 'edit') && !fontsReady}
               onClick={() => choose(t.tool)}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
                 tool === t.tool

@@ -4,7 +4,7 @@ import { hitTest, objectBounds, translate, type EditorObject } from '../../edito
 import { snapBox, type Guide, type SnapTarget } from '../../editor/snapping';
 import { objectOp } from '../../editor/object-ops';
 import { useEditor } from '../../editor/store';
-import { nearestRun, styleFromRun } from '../../editor/text-defaults';
+import { editSpecFor, nearestRun, styleFromRun } from '../../editor/text-defaults';
 import { DEFAULT_TEXT_STYLE, MARKUP_COLORS, useTools, type Tool } from '../../editor/tools';
 import { firstBaselineOffset } from '../../shared/fonts';
 import type { AnnotSpec, PageInfo, Point, Quad, Rect, TextRun, TextSpec } from '../../shared/types';
@@ -217,6 +217,31 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
   );
   const selected = pageObjects.find((o) => o.id === selectedId);
 
+  // The PDF's own text under a point (not text the user added: that is edited as an object).
+  const [hover, setHover] = useState<TextRun | null>(null);
+  const runAt = (p: Point): TextRun | null => {
+    const pad = 1;
+    const run = runs.current.find(
+      (r) =>
+        p.x >= r.bbox.x - pad &&
+        p.x <= r.bbox.x + r.bbox.w + pad &&
+        p.y >= r.bbox.y - pad &&
+        p.y <= r.bbox.y + r.bbox.h + pad,
+    );
+    if (!run) return null;
+    const ours = pageObjects.some((o) => {
+      const b = objectBounds(o);
+      return (
+        o.kind === 'text' &&
+        run.bbox.x >= b.x - 1 &&
+        run.bbox.x + run.bbox.w <= b.x + b.w + 1 &&
+        run.bbox.y >= b.y - 2 &&
+        run.bbox.y + run.bbox.h <= b.y + b.h + 2
+      );
+    });
+    return ours ? null : run;
+  };
+
   const toPage = useCallback(
     (e: { clientX: number; clientY: number }): Point => {
       const r = layer.current!.getBoundingClientRect();
@@ -274,6 +299,32 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         select(hit?.id ?? null);
         if (hit) gesture.current = { kind: 'move', object: hit, start: p, moved: null };
         return;
+      case 'edit': {
+        if (hit?.kind === 'text') {
+          select(null);
+          setDraft({
+            id: hit.id,
+            page: page.index,
+            isNew: false,
+            original: hit.spec,
+            spec: hit.spec,
+          });
+          return;
+        }
+        const run = runAt(p);
+        if (!run) return;
+        select(null);
+        setHover(null);
+        setDraft({
+          id: newId(),
+          page: page.index,
+          isNew: true,
+          original: null,
+          edit: { target: { text: run.text, bbox: run.bbox } },
+          spec: editSpecFor(run, runs.current, measureTextWidth),
+        });
+        return;
+      }
       case 'text':
         if (hit?.kind === 'text') {
           select(null);
@@ -359,7 +410,14 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const g = gesture.current;
-    if (!g) return;
+    if (!g) {
+      // Edit text: show which run a click would edit.
+      if (tool === 'edit' && !draft) {
+        const run = runAt(toPage(e));
+        if (run !== hover) setHover(run);
+      }
+      return;
+    }
     const p = toPage(e);
     switch (g.kind) {
       case 'move': {
@@ -465,6 +523,22 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
       const current = useTools.getState().draft;
       setDraft(null);
       if (!current || !spec) return;
+      if (current.edit) {
+        // Unchanged text (and style): nothing to do. Emptying a run removes it.
+        const unchanged =
+          spec.text === current.edit.target.text &&
+          JSON.stringify(spec.style) === JSON.stringify(current.spec.style);
+        if (unchanged) return;
+        await commit({
+          kind: 'text.edit',
+          id: current.id,
+          page: current.page,
+          target: current.edit.target,
+          spec,
+        });
+        if (spec.text.trim()) select(current.id);
+        return;
+      }
       if (!spec.text.trim()) {
         if (!current.isNew)
           await commit({ kind: 'text.delete', id: current.id, page: current.page });
@@ -504,6 +578,7 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     sign: 'copy',
     image: 'copy',
     form: 'default',
+    edit: 'text',
   };
 
   const nudge = useTools((s) => s.nudge);
@@ -590,6 +665,18 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
               strokeWidth={1}
             />
           ),
+        )}
+        {tool === 'edit' && hover && !draft && (
+          <rect
+            data-testid="edit-hover"
+            x={hover.bbox.x * zoom - 2}
+            y={hover.bbox.y * zoom - 2}
+            width={hover.bbox.w * zoom + 4}
+            height={hover.bbox.h * zoom + 4}
+            fill="rgb(37 99 235 / 0.08)"
+            stroke="#2563eb"
+            strokeDasharray="3 2"
+          />
         )}
         {selectionBox && (
           <rect
