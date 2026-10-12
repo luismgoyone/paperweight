@@ -11,6 +11,7 @@ import type { AnnotSpec, PageInfo, Point, Quad, Rect, TextRun, TextSpec } from '
 import { cssColor } from '../colors';
 import { measureTextWidth } from '../measure';
 import { FormLayer } from './FormLayer';
+import { SlotLayer } from './SlotLayer';
 import { TextEditor } from './TextEditor';
 
 const SNAP_PX = 6; // snap threshold in screen pixels
@@ -229,6 +230,7 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
   const objects = useEditor((s) => s.objects);
   const commit = useEditor((s) => s.commit);
   const getTextRuns = useEditor((s) => s.getTextRuns);
+  const hasForm = useEditor((s) => s.hasForm);
   const selectText = useEditor((s) => s.selectText);
   const tool = useTools((s) => s.tool);
   const selectedId = useTools((s) => s.selectedId);
@@ -813,6 +815,7 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         </>
       )}
       {tool === 'form' && <FormLayer page={page} zoom={zoom} />}
+      {tool === 'form' && !hasForm && <SlotLayer page={page} zoom={zoom} />}
       {draft && draft.page === page.index && (
         <TextEditor
           key={draft.id}

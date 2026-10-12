@@ -95,6 +95,11 @@ Referrer-Policy: no-referrer
 - **Images**: insert PNG or JPEG images; move them and resize from a corner.
 - **Forms**: fill text fields, checkboxes, radio buttons and dropdowns in the document's own tab
   order. Download with the form flattened if it shouldn't be edited again.
+- **Flat forms** (no fields: printed, scanned, or re-saved from Word): Form fill finds the blank
+  boxes and checkboxes on the page and highlights them. Click a box to type in it (fitted to the
+  box), or a checkbox to tick or clear an "X". Detection reads the rendered page (enclosed white
+  areas without printed text), entirely in the browser; it can miss boxes, so Add text (T) is
+  there for the rest.
 
 ### Markup and add text (Phase 2)
 

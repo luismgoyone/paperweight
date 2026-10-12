@@ -76,10 +76,15 @@ export function findSlots(doc: mupdf.Document, pageIndex: number): Slot[] {
         if (y < y0) y0 = y;
         if (y > y1) y1 = y;
         if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge = true;
-        if (x > 0 && label[i - 1] === 0) ((label[i - 1] = id), (stack[top++] = i - 1));
-        if (x < w - 1 && label[i + 1] === 0) ((label[i + 1] = id), (stack[top++] = i + 1));
-        if (y > 0 && label[i - w] === 0) ((label[i - w] = id), (stack[top++] = i - w));
-        if (y < h - 1 && label[i + w] === 0) ((label[i + w] = id), (stack[top++] = i + w));
+        const visit = (j: number) => {
+          if (label[j] !== 0) return;
+          label[j] = id;
+          stack[top++] = j;
+        };
+        if (x > 0) visit(i - 1);
+        if (x < w - 1) visit(i + 1);
+        if (y > 0) visit(i - w);
+        if (y < h - 1) visit(i + w);
       }
       // Touching the page edge: the margin around the form, not a box.
       if (edge) continue;

@@ -32,6 +32,8 @@ export type TextDraft = {
   original: TextSpec | null;
   /** Set when editing a run of the PDF's own text (commit = text.edit). */
   edit?: { target: { text: string; bbox: Rect } };
+  /** One line only, so Enter commits (a box on a flat form). */
+  singleLine?: boolean;
 };
 
 /** Arrow-key nudges accumulate here and become one op when the key is released. */
