@@ -1,4 +1,4 @@
-import { Fragment, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { fitWithin } from '../editor/signature';
 import { useEditor } from '../editor/store';
 import { useTools, type Tool } from '../editor/tools';
@@ -19,7 +19,7 @@ const svg = (children: ReactNode) => (
   </svg>
 );
 
-type ToolDef = { tool: Tool; label: string; shortcut?: string; icon: ReactNode };
+type ToolDef = { tool: Tool; label: string; hint: string; shortcut?: string; icon: ReactNode };
 
 // Grouped as in spec §5. Tools from later phases are hidden, not disabled.
 const GROUPS: ToolDef[][] = [
@@ -27,6 +27,7 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'select',
       label: 'Select',
+      hint: 'Select, move and resize',
       shortcut: 'V',
       icon: svg(<path d="m4 3 7 17 2.5-7.5L21 10z" />),
     },
@@ -35,6 +36,7 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'edit',
       label: 'Edit text',
+      hint: 'Click a line of text to change it',
       shortcut: 'E',
       icon: svg(
         <>
@@ -46,6 +48,7 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'text',
       label: 'Add text',
+      hint: 'Click to place a text box',
       shortcut: 'T',
       icon: svg(<path d="M5 6V4h14v2M12 4v16M9 20h6" />),
     },
@@ -54,6 +57,7 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'highlight',
       label: 'Highlight',
+      hint: 'Drag across text',
       shortcut: 'H',
       icon: svg(
         <>
@@ -65,6 +69,7 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'underline',
       label: 'Underline',
+      hint: 'Drag across text',
       icon: svg(
         <>
           <path d="M6 4v6a6 6 0 0 0 12 0V4" />
@@ -75,6 +80,7 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'strikeout',
       label: 'Strikethrough',
+      hint: 'Drag across text',
       icon: svg(
         <>
           <path d="M16 4H9a3 3 0 0 0-2.83 4" />
@@ -88,18 +94,31 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'ink',
       label: 'Pen',
+      hint: 'Draw freehand',
       icon: svg(<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />),
     },
     {
       tool: 'rect',
       label: 'Rectangle',
+      hint: 'Drag to draw; Shift for a square',
       icon: svg(<rect x="3" y="5" width="18" height="14" rx="1" />),
     },
-    { tool: 'ellipse', label: 'Ellipse', icon: svg(<ellipse cx="12" cy="12" rx="9" ry="7" />) },
-    { tool: 'line', label: 'Line', icon: svg(<path d="M5 19 19 5" />) },
+    {
+      tool: 'ellipse',
+      label: 'Ellipse',
+      hint: 'Drag to draw; Shift for a circle',
+      icon: svg(<ellipse cx="12" cy="12" rx="9" ry="7" />),
+    },
+    {
+      tool: 'line',
+      label: 'Line',
+      hint: 'Drag to draw; Shift snaps to 45°',
+      icon: svg(<path d="M5 19 19 5" />),
+    },
     {
       tool: 'arrow',
       label: 'Arrow',
+      hint: 'Drag to draw; Shift snaps to 45°',
       icon: svg(
         <>
           <path d="M5 19 19 5" />
@@ -110,6 +129,7 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'note',
       label: 'Note',
+      hint: 'Click to add a sticky note',
       icon: svg(
         <>
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -121,11 +141,13 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'sign',
       label: 'Sign',
+      hint: 'Draw, type or upload a signature',
       icon: svg(<path d="M3 17c3-3 4-9 6-9s1 7 3 7 2-4 4-4 2 3 5 3M3 21h18" />),
     },
     {
       tool: 'form',
       label: 'Form fill',
+      hint: 'Fill in the PDF’s fillable fields',
       icon: svg(
         <>
           <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -136,6 +158,7 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'image',
       label: 'Image',
+      hint: 'Insert a PNG or JPEG',
       icon: svg(
         <>
           <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -149,6 +172,7 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'redact',
       label: 'Redact',
+      hint: 'Mark areas to remove for good',
       icon: svg(
         <>
           <rect x="3" y="9" width="18" height="6" rx="1" fill="currentColor" />
@@ -160,6 +184,40 @@ const GROUPS: ToolDef[][] = [
 ];
 
 const MAX_IMAGE_PX = 2000;
+const TOOLTIP_DELAY = 400; // ms before the first tooltip; moving between tools is instant
+const TOOLTIP_ID = 'tool-tooltip';
+
+type Tip = { def: ToolDef; x: number; y: number };
+
+/** Below the button, centred, kept inside the window. Fixed, so the scrolling bar can't clip it. */
+function ToolTooltip({ tip, fontsReady }: { tip: Tip; fontsReady: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [left, setLeft] = useState(tip.x);
+  useEffect(() => {
+    const w = ref.current?.offsetWidth ?? 0;
+    setLeft(Math.min(Math.max(tip.x - w / 2, 8), window.innerWidth - w - 8));
+  }, [tip]);
+  const needsFonts = (tip.def.tool === 'text' || tip.def.tool === 'edit') && !fontsReady;
+  return (
+    <div
+      ref={ref}
+      id={TOOLTIP_ID}
+      role="tooltip"
+      className="pointer-events-none fixed z-50 max-w-60 rounded-md bg-slate-900 px-2.5 py-1.5 text-xs text-white shadow-lg"
+      style={{ left, top: tip.y }}
+    >
+      <span className="flex items-center gap-2 font-medium">
+        {tip.def.label}
+        {tip.def.shortcut && (
+          <kbd className="rounded border border-slate-600 px-1 font-sans text-[10px] text-slate-300">
+            {tip.def.shortcut}
+          </kbd>
+        )}
+      </span>
+      <span className="block text-slate-300">{needsFonts ? 'Loading fonts…' : tip.def.hint}</span>
+    </div>
+  );
+}
 
 /** Reads a PNG/JPEG, downscaling anything larger than 2000 px on the long edge. */
 async function readImage(file: File): Promise<Uint8Array> {
@@ -189,11 +247,36 @@ export function Toolbar() {
   const addImage = useEditor((s) => s.addImage);
   const showToast = useEditor((s) => s.showToast);
   const imageInput = useRef<HTMLInputElement>(null);
+  const [tip, setTip] = useState<Tip | null>(null);
+  const tipTimer = useRef<number | undefined>(undefined);
+  const lastTipAt = useRef(0);
+
+  // `at` is the event's timestamp: moving straight from one tool to the next shows at once.
+  const showTip = (def: ToolDef, el: HTMLElement, at: number) => {
+    window.clearTimeout(tipTimer.current);
+    const r = el.getBoundingClientRect();
+    const next = { def, x: r.left + r.width / 2, y: r.bottom + 6 };
+    if (at - lastTipAt.current < 500) setTip(next);
+    else tipTimer.current = window.setTimeout(() => setTip(next), TOOLTIP_DELAY);
+  };
+  const hideTip = (at: number) => {
+    window.clearTimeout(tipTimer.current);
+    if (tip) lastTipAt.current = at;
+    setTip(null);
+  };
+  useEffect(() => () => window.clearTimeout(tipTimer.current), []);
 
   const choose = (next: Tool) => {
     const tools = useTools.getState();
     if (next === 'image') {
       imageInput.current?.click();
+      return;
+    }
+    // Many forms are flat (printed or re-saved to PDF): their boxes are drawings, not fields.
+    if (next === 'form' && !useEditor.getState().hasForm) {
+      showToast(
+        'This PDF has no fillable form fields. To fill it in, use Add text (T) and click where you want to type.',
+      );
       return;
     }
     setTool(next);
@@ -238,32 +321,48 @@ export function Toolbar() {
         <Fragment key={i}>
           {i > 0 && <span className="mx-1.5 h-5 w-px bg-slate-200" />}
           {group.map((t) => (
-            <button
+            // The wrapper gets hover events even while the button is disabled.
+            <span
               key={t.tool}
-              type="button"
-              aria-label={t.label}
-              aria-pressed={tool === t.tool}
-              title={
-                (t.tool === 'text' || t.tool === 'edit') && !fontsReady
-                  ? 'Loading fonts…'
-                  : t.shortcut
-                    ? `${t.label} (${t.shortcut})`
-                    : t.label
-              }
-              // Text needs the bundled fonts, which load right after the page.
-              disabled={(t.tool === 'text' || t.tool === 'edit') && !fontsReady}
-              onClick={() => choose(t.tool)}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
-                tool === t.tool
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40'
-              }`}
+              className="inline-flex"
+              onPointerEnter={(e) => {
+                if (e.pointerType === 'mouse') showTip(t, e.currentTarget, e.timeStamp);
+              }}
+              onPointerLeave={(e) => hideTip(e.timeStamp)}
             >
-              {t.icon}
-            </button>
+              <button
+                type="button"
+                aria-label={t.label}
+                aria-keyshortcuts={t.shortcut}
+                aria-describedby={tip?.def.tool === t.tool ? TOOLTIP_ID : undefined}
+                aria-pressed={tool === t.tool}
+                // Text needs the bundled fonts, which load right after the page.
+                disabled={(t.tool === 'text' || t.tool === 'edit') && !fontsReady}
+                onClick={(e) => {
+                  hideTip(e.timeStamp);
+                  choose(t.tool);
+                }}
+                onFocus={(e) => {
+                  if (e.currentTarget.matches(':focus-visible'))
+                    showTip(t, e.currentTarget, e.timeStamp);
+                }}
+                onBlur={(e) => hideTip(e.timeStamp)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') hideTip(e.timeStamp);
+                }}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+                  tool === t.tool
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40'
+                }`}
+              >
+                {t.icon}
+              </button>
+            </span>
           ))}
         </Fragment>
       ))}
+      {tip && <ToolTooltip tip={tip} fontsReady={fontsReady} />}
     </div>
   );
 }
