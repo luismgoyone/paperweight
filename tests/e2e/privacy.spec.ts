@@ -167,6 +167,14 @@ test('signing, inserting an image and filling a form stay on the device', async 
     .setInputFiles({ name: 'x.png', mimeType: 'image/png', buffer: Buffer.from(png) });
   await page.mouse.click(origin.x + 100, origin.y + 300);
 
+  // Phase 4: rotate, insert another PDF, extract.
+  await page.getByRole('button', { name: 'Rotate right' }).click();
+  await page.getByTestId('insert-pdf-input').setInputFiles('tests/fixtures/simple.pdf');
+  await expect(page.getByTestId('thumbnail')).toHaveCount(4);
+  const extracted = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Extract pages' }).click();
+  await extracted;
+
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download PDF' }).click();
   await download;

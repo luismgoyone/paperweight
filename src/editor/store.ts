@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { editedFileName } from '../shared/filename';
+import { range, type PageRange } from '../shared/ranges';
 import type {
   FormField,
   ImageAsset,
@@ -79,6 +80,16 @@ export type EditorState = {
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
   /** Form widgets on a page with their current values. */
   getFields(page: number): Promise<FormField[]>;
+  /** Inserts every page of a PDF before page `at` (merge). Asks for a password if needed. */
+  insertDocument(file: File, at: number, password?: string): Promise<void>;
+  /** Set while a PDF being inserted needs its password. */
+  insertPassword: { fileName: string; wrong: boolean } | null;
+  submitInsertPassword(password: string): void;
+  cancelInsertPassword(): void;
+  /** Downloads a new PDF made of these pages. */
+  extractPages(pages: number[]): Promise<void>;
+  /** Downloads one PDF per range (inclusive, 0-based). */
+  split(ranges: PageRange[]): Promise<void>;
   /** Registers PNG/JPEG bytes for image ops (kept in memory for this tab only). */
   addImage(bytes: Uint8Array): Promise<ImageAsset>;
   setZoom(zoom: number): void;
@@ -111,11 +122,34 @@ let pending: Source | null = null;
 let restarts = 0;
 // Images placed this session, by key, so a restarted engine can be given them again.
 const images = new Map<string, Uint8Array>();
+// PDFs inserted this session (merge), by key, for the same reason.
+const documents = new Map<string, { bytes: Uint8Array; password?: string }>();
+// A PDF being inserted that is waiting for its password.
+let pendingInsert: { key: string; bytes: Uint8Array; file: File; at: number } | null = null;
 /** Resolves when the current engine has every bundled font (text ops need them). */
 let fontsRegistered: Promise<void> = Promise.resolve();
 // History changes and the engine sync that follows them run one at a time, so a failed op
 // is always the last one pushed and a download always saves the state it marks as saved.
 const exclusive = createSerialQueue();
+
+/** Hands bytes to the browser as a download. The output file is the only thing that leaves the tab. */
+function saveFile(bytes: Uint8Array, name: string): void {
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  // Revoking immediately can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+const baseName = (name: string) =>
+  name
+    .trim()
+    .replace(/\.pdf$/i, '')
+    .trim() || 'document';
 
 function engineOrThrow(): EngineClient {
   if (!engine) throw new Error('The PDF engine is not running');
@@ -127,6 +161,12 @@ function messageOf(e: unknown): string {
 }
 
 export const useEditor = create<EditorState>()((set, get) => {
+  // Page changes invalidate page-indexed UI state.
+  const afterPageChange = () => {
+    const last = get().pages.length - 1;
+    set({ search: EMPTY_SEARCH, currentPage: Math.min(get().currentPage, Math.max(0, last)) });
+  };
+
   const historyFlags = () => ({
     canUndo: history.canUndo,
     canRedo: history.canRedo,
@@ -198,6 +238,9 @@ export const useEditor = create<EditorState>()((set, get) => {
     if (!source) return;
     try {
       await Promise.all([...images].map(([key, bytes]) => client.registerImage(key, bytes)));
+      await Promise.all(
+        [...documents].map(([key, d]) => client.registerDocument(key, d.bytes, d.password)),
+      );
       const result = await client.open(source.bytes, source.password);
       if (result.status !== 'ok') throw new Error('Could not reopen the document');
       await exclusive(sync);
@@ -270,6 +313,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     passwordError: false,
     fileName: '',
     hasForm: false,
+    insertPassword: null,
     docId: 0,
     pages: [],
     pageVersions: [],
@@ -322,12 +366,75 @@ export const useEditor = create<EditorState>()((set, get) => {
         history.push(op);
         try {
           await sync();
+          if (op.kind.startsWith('page.')) afterPageChange();
         } catch (e) {
           history.rejectLast();
           set(historyFlags());
           get().showToast(`That change could not be applied: ${messageOf(e)}`);
         }
       });
+    },
+
+    async insertDocument(file, at, password) {
+      const key = pendingInsert?.key ?? newId();
+      const bytes = pendingInsert?.bytes ?? new Uint8Array(await file.arrayBuffer());
+      const result = await engineOrThrow().registerDocument(key, bytes, password);
+      switch (result.status) {
+        case 'ok':
+          pendingInsert = null;
+          set({ insertPassword: null });
+          documents.set(key, { bytes, password });
+          await get().commit({
+            kind: 'page.insertFrom',
+            at,
+            source: key,
+            pages: Array.from({ length: result.pageCount }, (_, i) => i),
+          });
+          get().showToast(
+            `Inserted ${result.pageCount} page${result.pageCount === 1 ? '' : 's'} from "${file.name}".`,
+          );
+          return;
+        case 'needs-password':
+        case 'wrong-password':
+          pendingInsert = { key, bytes, file, at };
+          set({
+            insertPassword: { fileName: file.name, wrong: result.status === 'wrong-password' },
+          });
+          return;
+        case 'error':
+          pendingInsert = null;
+          set({ insertPassword: null });
+          get().showToast(`"${file.name}" could not be opened as a PDF. (${result.message})`);
+      }
+    },
+
+    submitInsertPassword(password) {
+      if (pendingInsert) void get().insertDocument(pendingInsert.file, pendingInsert.at, password);
+    },
+
+    cancelInsertPassword() {
+      pendingInsert = null;
+      set({ insertPassword: null });
+    },
+
+    async extractPages(pages) {
+      if (!pages.length) return;
+      const sorted = [...pages].sort((a, b) => a - b);
+      const bytes = await engineOrThrow().extract(sorted);
+      const label =
+        sorted.length === 1
+          ? `${sorted[0]! + 1}`
+          : `${sorted[0]! + 1}-${sorted[sorted.length - 1]! + 1}`;
+      saveFile(bytes, `${baseName(get().fileName)}-pages-${label}.pdf`);
+    },
+
+    async split(ranges) {
+      for (const [first, last] of ranges) {
+        const bytes = await engineOrThrow().extract(range(first, last));
+        saveFile(bytes, `${baseName(get().fileName)}-pages-${first + 1}-${last + 1}.pdf`);
+        // Some browsers drop downloads triggered too quickly in a row.
+        await new Promise((r) => setTimeout(r, 300));
+      }
     },
 
     async updateObject(id, fn) {
@@ -351,9 +458,11 @@ export const useEditor = create<EditorState>()((set, get) => {
     undo() {
       return exclusive(async () => {
         if (!history.canUndo) return;
+        const undone = history.ops[history.cursor - 1]!;
         history.undo();
         try {
           await sync();
+          if (undone.kind.startsWith('page.')) afterPageChange();
         } catch (e) {
           history.redo();
           set(historyFlags());
@@ -365,9 +474,11 @@ export const useEditor = create<EditorState>()((set, get) => {
     redo() {
       return exclusive(async () => {
         if (!history.canRedo) return;
+        const redone = history.ops[history.cursor]!;
         history.redo();
         try {
           await sync();
+          if (redone.kind.startsWith('page.')) afterPageChange();
         } catch (e) {
           history.undo();
           set(historyFlags());
@@ -386,15 +497,7 @@ export const useEditor = create<EditorState>()((set, get) => {
           get().showToast(`The PDF could not be saved: ${messageOf(e)}`);
           return;
         }
-        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = editedFileName(get().fileName);
-        document.body.append(a);
-        a.click();
-        a.remove();
-        // Revoking immediately can cancel the download in some browsers.
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        saveFile(bytes, editedFileName(get().fileName));
         history.markSaved();
         set(historyFlags());
       });

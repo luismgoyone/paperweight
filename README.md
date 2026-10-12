@@ -5,8 +5,8 @@ A free PDF editor that runs entirely in your browser. **Files never leave your d
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.
 
-> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–3 (viewer, markup, add text,
-> signatures, forms, images) are built; see the [Roadmap](#roadmap).
+> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–4 (viewer, markup, add text,
+> signatures, forms, images, page management) are built; see the [Roadmap](#roadmap).
 
 ## Privacy guarantees
 
@@ -30,6 +30,16 @@ Referrer-Policy: no-referrer
 ```
 
 ## Features
+
+### Pages (Phase 4)
+
+- Reorder by dragging thumbnails (select several with ⌘/Ctrl-click or Shift-click), or Alt+↑/↓.
+- Rotate, delete, and insert blank pages; insert all pages of another PDF (merge), including
+  password-protected ones.
+- Extract the selected pages to a new PDF, or split the document every N pages or by custom
+  ranges (one download per part).
+- Everything is undoable. Items you added on a page that you later rotate stay on the page but
+  are no longer editable.
 
 ### Signatures, forms and images (Phase 3)
 
@@ -79,6 +89,7 @@ Referrer-Policy: no-referrer
 | Delete selection              | Delete                       |
 | Nudge selection               | Arrow keys (Shift: 10 pt)    |
 | Finish / cancel text          | ⌘Enter / Esc                 |
+| Move selected pages           | Alt+↑ / Alt+↓                |
 
 ## Architecture
 
@@ -119,7 +130,7 @@ UI mockups made with Google Stitch live in [`docs/design/`](docs/design/).
 - [x] **Phase 1: Core**: viewer, search, op log, download, privacy enforcement
 - [x] **Phase 2: Markup and add text**: annotations, add text, alignment guides, flatten
 - [x] **Phase 3: Signatures, forms and images**
-- [ ] Phase 4: Page management (reorder, rotate, merge, split)
+- [x] **Phase 4: Page management**: reorder, rotate, delete, insert, merge, extract, split
 - [ ] Phase 5: Edit existing text in the same font
 - [ ] Phase 6: Redact, compress, passwords
 - [ ] Phase 7: OCR (Tesseract.js, self-hosted)

@@ -59,7 +59,7 @@ export function useKeyboard(focusSearch: () => void) {
         e.preventDefault();
         useTools.getState().select(null);
         void s.updateObject(selected.id, () => null);
-      } else if (NUDGE[e.key]) {
+      } else if (NUDGE[e.key] && !e.altKey) {
         const selected = s.objects.find((o) => o.id === useTools.getState().selectedId);
         if (!selected) return;
         e.preventDefault();
