@@ -44,3 +44,12 @@ test('tooltips also appear on keyboard focus and are described to screen readers
   await page.keyboard.press('Escape');
   await expect(tooltip).toBeHidden();
 });
+
+test('Form fill on a PDF without fillable fields says so and points to Add text', async ({
+  page,
+}) => {
+  // simple.pdf has no form fields, like a form that was printed or re-saved to PDF.
+  await page.getByRole('button', { name: 'Form fill' }).click();
+  await expect(page.getByRole('status')).toContainText('no fillable form fields');
+  await expect(page.getByRole('status')).toContainText('Add text');
+});

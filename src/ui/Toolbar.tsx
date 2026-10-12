@@ -147,7 +147,7 @@ const GROUPS: ToolDef[][] = [
     {
       tool: 'form',
       label: 'Form fill',
-      hint: 'Fill in the form fields',
+      hint: 'Fill in the PDF’s fillable fields',
       icon: svg(
         <>
           <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -270,6 +270,13 @@ export function Toolbar() {
     const tools = useTools.getState();
     if (next === 'image') {
       imageInput.current?.click();
+      return;
+    }
+    // Many forms are flat (printed or re-saved to PDF): their boxes are drawings, not fields.
+    if (next === 'form' && !useEditor.getState().hasForm) {
+      showToast(
+        'This PDF has no fillable form fields. To fill it in, use Add text (T) and click where you want to type.',
+      );
       return;
     }
     setTool(next);
