@@ -5,8 +5,8 @@ A free PDF editor that runs entirely in your browser. **Files never leave your d
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.
 
-> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–2 (viewer, markup, add text) are
-> done; see the [Roadmap](#roadmap).
+> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–3 (viewer, markup, add text,
+> signatures, forms, images) are built; see the [Roadmap](#roadmap).
 
 ## Privacy guarantees
 
@@ -30,6 +30,15 @@ Referrer-Policy: no-referrer
 ```
 
 ## Features
+
+### Signatures, forms and images (Phase 3)
+
+- **Sign**: draw a signature (smoothed), type it in a script font, or upload a photo of it with
+  automatic background removal. Signatures are kept for reuse until you close the tab, and
+  never stored.
+- **Images**: insert PNG or JPEG images; move them and resize from a corner.
+- **Forms**: fill text fields, checkboxes, radio buttons and dropdowns in the document's own tab
+  order. Download with the form flattened if it shouldn't be edited again.
 
 ### Markup and add text (Phase 2)
 
@@ -109,7 +118,7 @@ UI mockups made with Google Stitch live in [`docs/design/`](docs/design/).
 
 - [x] **Phase 1: Core**: viewer, search, op log, download, privacy enforcement
 - [x] **Phase 2: Markup and add text**: annotations, add text, alignment guides, flatten
-- [ ] Phase 3: Signatures, forms and images
+- [x] **Phase 3: Signatures, forms and images**
 - [ ] Phase 4: Page management (reorder, rotate, merge, split)
 - [ ] Phase 5: Edit existing text in the same font
 - [ ] Phase 6: Redact, compress, passwords
@@ -123,13 +132,14 @@ The full source is linked from the app ("Source code").
 
 ### Third-party licenses
 
-| Component                    | License                                                           |
-| ---------------------------- | ----------------------------------------------------------------- |
-| MuPDF.js (`mupdf`)           | AGPL-3.0-or-later                                                 |
-| React, Zustand, Comlink      | MIT / MIT / Apache-2.0                                            |
-| Liberation Sans, Serif, Mono | SIL OFL 1.1 ([license](public/fonts/licenses/Liberation-OFL.txt)) |
-| Inter                        | SIL OFL 1.1 ([license](public/fonts/licenses/Inter-OFL.txt))      |
-| Noto Sans, Noto Serif        | SIL OFL 1.1 ([license](public/fonts/licenses/Noto-OFL.txt))       |
+| Component                                | License                                                           |
+| ---------------------------------------- | ----------------------------------------------------------------- |
+| MuPDF.js (`mupdf`)                       | AGPL-3.0-or-later                                                 |
+| React, Zustand, Comlink                  | MIT / MIT / Apache-2.0                                            |
+| Liberation Sans, Serif, Mono             | SIL OFL 1.1 ([license](public/fonts/licenses/Liberation-OFL.txt)) |
+| Inter                                    | SIL OFL 1.1 ([license](public/fonts/licenses/Inter-OFL.txt))      |
+| Noto Sans, Noto Serif                    | SIL OFL 1.1 ([license](public/fonts/licenses/Noto-OFL.txt))       |
+| Dancing Script, Great Vibes (signatures) | SIL OFL 1.1 ([licenses](public/fonts/licenses/))                  |
 
 Fonts are self-hosted and loaded once at startup (about 11 MB uncompressed), so the
 "no requests after load" guarantee holds while editing.
