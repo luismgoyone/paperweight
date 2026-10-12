@@ -14,6 +14,7 @@ import type {
 } from '../shared/types';
 import { newId } from './ids';
 import { createEngineClient, createSerialQueue, type EngineClient } from './engine-client';
+import { buildDocx } from './docx';
 import { loadFonts } from './fonts';
 import { recognize } from './ocr';
 import { History } from './history';
@@ -111,6 +112,9 @@ export type EditorState = {
   cancelOcr(): void;
   /** Whether a page has images (to tell scans from blank pages). */
   pageHasImages(page: number): Promise<boolean>;
+  /** Downloads a Word (.docx) version of the document (best-effort, spec §6 Phase 8). */
+  exportWord(): Promise<void>;
+  exportingWord: boolean;
   /** Applies every marked redaction (one op per page). */
   applyRedactions(marks: { page: number; rect: Rect }[]): Promise<void>;
   /** Downloads a new PDF made of these pages. */
@@ -162,8 +166,10 @@ let fontsRegistered: Promise<void> = Promise.resolve();
 const exclusive = createSerialQueue();
 
 /** Hands bytes to the browser as a download. The output file is the only thing that leaves the tab. */
-function saveFile(bytes: Uint8Array, name: string): void {
-  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
+function saveFile(data: Uint8Array | Blob, name: string): void {
+  const blob =
+    data instanceof Blob ? data : new Blob([data as BlobPart], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = name;
@@ -401,6 +407,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     insertPassword: null,
     isProtected: false,
     ocr: null,
+    exportingWord: false,
     docId: 0,
     pages: [],
     pageVersions: [],
@@ -560,6 +567,20 @@ export const useEditor = create<EditorState>()((set, get) => {
 
     pageHasImages(page) {
       return engineOrThrow().hasImages(page);
+    },
+
+    async exportWord() {
+      if (get().exportingWord || !source) return;
+      set({ exportingWord: true });
+      try {
+        const model = await exclusive(() => engineOrThrow().documentModel());
+        const blob = await buildDocx(model);
+        saveFile(blob, `${baseName(get().fileName)}.docx`);
+      } catch (e) {
+        get().showToast(`The Word file could not be created: ${messageOf(e)}`);
+      } finally {
+        set({ exportingWord: false });
+      }
     },
 
     compress(dpi) {

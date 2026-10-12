@@ -5,9 +5,10 @@ A free PDF editor that runs entirely in your browser. **Files never leave your d
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.
 
-> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–7 (viewer, markup, add text,
-> signatures, forms, images, page management, editing existing text, redaction, compression,
-> passwords, OCR) are built; see the [Roadmap](#roadmap).
+> Live at **https://pdf-editor-navy.vercel.app**. All eight phases of the
+> [design](docs/superpowers/specs/2026-10-12-pdf-editor-design.md) are built: viewer, markup,
+> add text, signatures, forms, images, page management, editing existing text, redaction,
+> compression, passwords, OCR and Word export; see the [Roadmap](#roadmap).
 
 ## Privacy guarantees
 
@@ -31,6 +32,16 @@ Referrer-Policy: no-referrer
 ```
 
 ## Features
+
+### Export to Word (Phase 8)
+
+- **Export to Word (.docx)** (download menu) turns the PDF into an editable document:
+  paragraphs with their sizes, bold/italic and alignment, images, and simple tables detected
+  from column-aligned text. It's best effort and the menu says so: complex layouts won't
+  round-trip exactly. Word → PDF is out of scope (no fully client-side renderer).
+- A scanned page with a text layer (from OCR here or from the scanner) exports as its text,
+  without the page image. Images are capped at 200 dpi, and pages are fitted to Word's size
+  limits. Multi-column layouts aren't reflowed column by column.
 
 ### OCR (Phase 7)
 
@@ -169,7 +180,7 @@ UI mockups made with Google Stitch live in [`docs/design/`](docs/design/).
 - [x] **Phase 5: Edit existing text in the same font**
 - [x] **Phase 6: Redact, compress, passwords**
 - [x] **Phase 7: OCR** (Tesseract.js, self-hosted)
-- [ ] Phase 8: PDF → Word
+- [x] **Phase 8: PDF → Word** (best effort)
 
 ## License
 
@@ -183,6 +194,7 @@ The full source is linked from the app ("Source code").
 | MuPDF.js (`mupdf`)                                    | AGPL-3.0-or-later                                                 |
 | React, Zustand, Comlink                               | MIT / MIT / Apache-2.0                                            |
 | Tesseract.js, tesseract.js-core                       | Apache-2.0                                                        |
+| docx (Word export)                                    | MIT                                                               |
 | Leptonica and image codecs (inside tesseract.js-core) | BSD-2-Clause and others (see the core's license)                  |
 | English OCR model (tessdata_fast)                     | Apache-2.0 ([license](public/tessdata/LICENSE-tessdata_fast.txt)) |
 | Liberation Sans, Serif, Mono                          | SIL OFL 1.1 ([license](public/fonts/licenses/Liberation-OFL.txt)) |

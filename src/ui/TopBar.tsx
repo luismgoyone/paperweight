@@ -105,6 +105,8 @@ function DownloadButton() {
   const download = useEditor((s) => s.download);
   const hasAnnotations = useEditor((s) => s.objects.some((o) => o.kind === 'annot'));
   const hasForm = useEditor((s) => s.hasForm);
+  const exportWord = useEditor((s) => s.exportWord);
+  const exportingWord = useEditor((s) => s.exportingWord);
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState<'compress' | 'protect' | null>(null);
 
@@ -179,6 +181,21 @@ function DownloadButton() {
               </span>
             </button>
           )}
+          <button
+            role="menuitem"
+            type="button"
+            disabled={exportingWord}
+            className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100 disabled:opacity-50"
+            onClick={() => {
+              setOpen(false);
+              void exportWord();
+            }}
+          >
+            {exportingWord ? 'Creating Word file…' : 'Export to Word (.docx)'}
+            <span className="block text-xs text-slate-500">
+              Best effort: text, images and simple tables; layout may differ
+            </span>
+          </button>
           <div className="my-1 border-t border-slate-200" />
           <button
             role="menuitem"
