@@ -1,6 +1,8 @@
 import type * as mupdf from 'mupdf';
 import type { Op } from '../../shared/types';
+import { applyAnnotOp } from './annotations';
 import { applySetTitle } from './meta';
+import { applyTextOp } from './text-add';
 
 /** An op could not be applied; the document stays at its prior state (spec §7). */
 export class OpError extends Error {
@@ -18,6 +20,14 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
     switch (op.kind) {
       case 'meta.setTitle':
         return applySetTitle(doc, op);
+      case 'annot.add':
+      case 'annot.update':
+      case 'annot.delete':
+        return applyAnnotOp(doc, op);
+      case 'text.add':
+      case 'text.update':
+      case 'text.delete':
+        return applyTextOp(doc, op);
       default:
         throw new Error(`Unknown operation "${(op as { kind: string }).kind}"`);
     }
@@ -29,8 +39,5 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
 
 /** Pages whose rendering an op changes. Document-level ops change none. */
 export function pagesTouched(op: Op): number[] {
-  switch (op.kind) {
-    case 'meta.setTitle':
-      return [];
-  }
+  return 'page' in op ? [op.page] : [];
 }

@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 import { editedFileName } from '../shared/filename';
-import type { Op, PageInfo, SearchHit } from '../shared/types';
+import type { Op, PageInfo, Point, Quad, SearchHit, TextRun } from '../shared/types';
 import { createEngineClient, createSerialQueue, type EngineClient } from './engine-client';
+import { loadFonts } from './fonts';
 import { History } from './history';
+import { foldObjects, type EditorObject } from './objects';
+import { objectOp } from './object-ops';
 import { clampZoom, fitPage, fitWidth, type ZoomMode } from './zoom';
 
 export const LARGE_FILE_BYTES = 200 * 1024 * 1024;
@@ -20,6 +23,8 @@ export type SearchState = {
 
 export type EditorState = {
   engineReady: boolean;
+  /** All bundled fonts are loaded in the browser and registered with the engine. */
+  fontsReady: boolean;
   status: Status;
   error: string | null;
   passwordError: boolean;
@@ -38,6 +43,8 @@ export type EditorState = {
   canRedo: boolean;
   dirty: boolean;
   search: SearchState;
+  /** Objects added by the user (annotations, text), in drawing order. Derived from the op log. */
+  objects: EditorObject[];
   toast: string | null;
 
   initEngine(): void;
@@ -45,9 +52,18 @@ export type EditorState = {
   submitPassword(password: string): Promise<void>;
   cancelPassword(): void;
   commit(op: Op): Promise<void>;
+  /**
+   * Changes an added object based on its latest committed state (`fn` returns the new object,
+   * or null to delete it). Runs in order with other edits, so quick successive changes can't
+   * overwrite each other with stale copies.
+   */
+  updateObject(id: string, fn: (o: EditorObject) => EditorObject | null): Promise<void>;
   undo(): Promise<void>;
   redo(): Promise<void>;
-  download(): Promise<void>;
+  download(options?: { flatten?: boolean }): Promise<void>;
+  /** Existing text on a page (cached per page version). */
+  getTextRuns(page: number): Promise<TextRun[]>;
+  selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
   setZoom(zoom: number): void;
   setZoomMode(mode: ZoomMode): void;
   applyFit(viewportW: number, viewportH: number): void;
@@ -76,6 +92,8 @@ let source: Source | null = null;
 /** A file being opened (e.g. waiting for its password); replaces `source` only once it opens. */
 let pending: Source | null = null;
 let restarts = 0;
+/** Resolves when the current engine has every bundled font (text ops need them). */
+let fontsRegistered: Promise<void> = Promise.resolve();
 // History changes and the engine sync that follows them run one at a time, so a failed op
 // is always the last one pushed and a download always saves the state it marks as saved.
 const exclusive = createSerialQueue();
@@ -94,7 +112,10 @@ export const useEditor = create<EditorState>()((set, get) => {
     canUndo: history.canUndo,
     canRedo: history.canRedo,
     dirty: history.dirty,
+    objects: [...foldObjects(history.active).values()],
   });
+
+  const textRunCache = new Map<string, Promise<TextRun[]>>();
 
   const bumpPages = (changed: number[] | 'all', pages = get().pages) => {
     const prev = get().pageVersions;
@@ -110,10 +131,24 @@ export const useEditor = create<EditorState>()((set, get) => {
     set(historyFlags());
   };
 
+  const registerFonts = async (client: EngineClient) => {
+    const fonts = await loadFonts();
+    await Promise.all([...fonts].map(([id, bytes]) => client.registerFont(id, bytes)));
+  };
+
   const startEngine = () => {
     const client = createEngineClient();
     engine = client;
     set({ engineReady: false });
+    fontsRegistered = registerFonts(client);
+    fontsRegistered.then(
+      () => {
+        if (engine === client) set({ fontsReady: true });
+      },
+      (e) => {
+        if (engine === client) get().showToast(`Fonts failed to load: ${messageOf(e)}`);
+      },
+    );
     client.ready.then(
       () => {
         if (engine === client) set({ engineReady: true });
@@ -202,6 +237,7 @@ export const useEditor = create<EditorState>()((set, get) => {
 
   return {
     engineReady: false,
+    fontsReady: false,
     status: 'empty',
     error: null,
     passwordError: false,
@@ -217,6 +253,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     canRedo: false,
     dirty: false,
     search: EMPTY_SEARCH,
+    objects: [],
     toast: null,
 
     initEngine() {
@@ -251,9 +288,28 @@ export const useEditor = create<EditorState>()((set, get) => {
       set({ status: source ? 'ready' : 'empty', passwordError: false });
     },
 
-    commit(op) {
+    async commit(op) {
+      if (op.kind.startsWith('text.')) await fontsRegistered.catch(() => undefined);
       return exclusive(async () => {
         history.push(op);
+        try {
+          await sync();
+        } catch (e) {
+          history.rejectLast();
+          set(historyFlags());
+          get().showToast(`That change could not be applied: ${messageOf(e)}`);
+        }
+      });
+    },
+
+    async updateObject(id, fn) {
+      await fontsRegistered.catch(() => undefined);
+      return exclusive(async () => {
+        const current = foldObjects(history.active).get(id);
+        if (!current) return;
+        const next = fn(current);
+        if (next && JSON.stringify(next) === JSON.stringify(current)) return;
+        history.push(objectOp(next ?? current, next ? 'update' : 'delete'));
         try {
           await sync();
         } catch (e) {
@@ -292,12 +348,12 @@ export const useEditor = create<EditorState>()((set, get) => {
       });
     },
 
-    download() {
+    download(options = {}) {
       return exclusive(async () => {
         if (!source) return;
         let bytes: Uint8Array;
         try {
-          bytes = await engineOrThrow().save();
+          bytes = await engineOrThrow().save(options);
         } catch (e) {
           get().showToast(`The PDF could not be saved: ${messageOf(e)}`);
           return;
@@ -388,6 +444,22 @@ export const useEditor = create<EditorState>()((set, get) => {
 
     dismissToast() {
       set({ toast: null });
+    },
+
+    getTextRuns(page) {
+      const key = `${get().docId}:${page}:${get().pageVersions[page] ?? 0}`;
+      let runs = textRunCache.get(key);
+      if (!runs) {
+        if (textRunCache.size > 200) textRunCache.clear();
+        runs = engineOrThrow().textRuns(page);
+        runs.catch(() => textRunCache.delete(key));
+        textRunCache.set(key, runs);
+      }
+      return runs;
+    },
+
+    selectText(page, a, b) {
+      return engineOrThrow().selectText(page, a, b);
     },
 
     render(page, scale, signal) {

@@ -2,7 +2,15 @@ import { useState, type RefObject } from 'react';
 import { useEditor } from '../editor/store';
 import { ZOOM_STEPS, zoomIn, zoomOut } from '../editor/zoom';
 import { SearchBar } from './SearchBar';
-import { DownloadIcon, MinusIcon, PlusIcon, RedoIcon, ShieldIcon, UndoIcon } from './icons';
+import {
+  ChevronDownIcon,
+  DownloadIcon,
+  MinusIcon,
+  PlusIcon,
+  RedoIcon,
+  ShieldIcon,
+  UndoIcon,
+} from './icons';
 
 export const SOURCE_URL = 'https://github.com/luismgoyone/pdf-editor';
 
@@ -91,6 +99,72 @@ function PageIndicator() {
   );
 }
 
+function DownloadButton() {
+  const download = useEditor((s) => s.download);
+  const hasAnnotations = useEditor((s) => s.objects.some((o) => o.kind === 'annot'));
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div
+      className="relative flex"
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={() => void download()}
+        title="Download PDF (⌘S)"
+        className="inline-flex items-center gap-1.5 rounded-l-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+      >
+        <DownloadIcon className="h-4 w-4" />
+        Download PDF
+      </button>
+      <button
+        type="button"
+        aria-label="More download options"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="rounded-r-lg border-l border-blue-500 bg-blue-600 px-2 text-white hover:bg-blue-700"
+      >
+        <ChevronDownIcon className="h-4 w-4" />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute top-full right-0 z-30 mt-1 w-64 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+        >
+          <button
+            role="menuitem"
+            type="button"
+            className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
+            onClick={() => {
+              setOpen(false);
+              void download();
+            }}
+          >
+            Download PDF
+            <span className="block text-xs text-slate-500">Annotations stay editable</span>
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            disabled={!hasAnnotations}
+            className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100 disabled:opacity-50"
+            onClick={() => {
+              setOpen(false);
+              void download({ flatten: true });
+            }}
+          >
+            Download flattened
+            <span className="block text-xs text-slate-500">
+              Annotations become part of the page
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PrivacyBadge() {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800">
@@ -107,7 +181,6 @@ export function TopBar({ searchInput }: { searchInput: RefObject<HTMLInputElemen
   const canRedo = useEditor((s) => s.canRedo);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
-  const download = useEditor((s) => s.download);
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-neutral-200 bg-white px-4">
@@ -162,17 +235,7 @@ export function TopBar({ searchInput }: { searchInput: RefObject<HTMLInputElemen
         >
           Source code
         </a>
-        {ready && (
-          <button
-            type="button"
-            onClick={() => void download()}
-            title="Download PDF (⌘S)"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-          >
-            <DownloadIcon className="h-4 w-4" />
-            Download PDF
-          </button>
-        )}
+        {ready && <DownloadButton />}
       </div>
     </header>
   );

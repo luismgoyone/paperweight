@@ -6,6 +6,7 @@ import { PageSidebar } from './PageSidebar';
 import { PropertiesPanel } from './PropertiesPanel';
 import { PasswordDialog } from './dialogs/PasswordDialog';
 import { Toast } from './Toast';
+import { Toolbar } from './Toolbar';
 import { TopBar } from './TopBar';
 import { useKeyboard } from './useKeyboard';
 
@@ -15,6 +16,7 @@ function isPdf(file: File) {
 
 export function App() {
   const engineReady = useEditor((s) => s.engineReady);
+  const fontsReady = useEditor((s) => s.fontsReady);
   const status = useEditor((s) => s.status);
   const hasDocument = useEditor((s) => s.pages.length > 0);
   const dirty = useEditor((s) => s.dirty);
@@ -73,6 +75,7 @@ export function App() {
       onDrop={onDrop}
     >
       {engineReady && <span data-testid="engine-ready" hidden />}
+      {fontsReady && <span data-testid="fonts-ready" hidden />}
       <input
         ref={fileInput}
         data-testid="file-input"
@@ -85,6 +88,7 @@ export function App() {
         }}
       />
       <TopBar searchInput={searchInput} />
+      {showViewer && <Toolbar />}
       <main className="flex min-h-0 flex-1">
         {showViewer ? (
           <>

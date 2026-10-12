@@ -81,8 +81,11 @@ export function createEngineClient(): EngineClient {
         signal?.aborted ? Promise.reject(new CancelledError()) : remote.render(page, scale),
       ),
     search: (needle) => call(() => remote.search(needle)),
-    save: () => call(() => remote.save()),
+    textRuns: (page) => call(() => remote.textRuns(page)),
+    selectText: (page, a, b) => call(() => remote.selectText(page, a, b)),
+    save: (options) => call(() => remote.save(options)),
     close: () => call(() => remote.close()),
+    registerFont: (id, bytes) => call(() => remote.registerFont(id, bytes)),
     terminate: () => {
       crashed = true;
       remote[Comlink.releaseProxy]();

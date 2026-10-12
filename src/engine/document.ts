@@ -8,6 +8,14 @@ const CHECKPOINT_EVERY = 20;
 
 export type ChangedPages = number[] | 'all';
 
+export type SaveOptions = { flatten?: boolean };
+
+function toBytes(buffer: mupdf.Buffer): Uint8Array {
+  const bytes = buffer.asUint8Array().slice();
+  buffer.destroy();
+  return bytes;
+}
+
 const sameOp = (a: Op, b: Op) => a === b || JSON.stringify(a) === JSON.stringify(b);
 
 function errorMessage(e: unknown): string {
@@ -129,10 +137,7 @@ export class EngineSession {
   }
 
   private snapshot(): Uint8Array {
-    const buffer = this.doc.saveToBuffer('');
-    const bytes = buffer.asUint8Array().slice();
-    buffer.destroy();
-    return bytes;
+    return toBytes(this.doc.saveToBuffer(''));
   }
 
   private reopenFrom(bytes: Uint8Array): void {
@@ -157,13 +162,25 @@ export class EngineSession {
     return pages;
   }
 
-  save(): Uint8Array {
-    const options =
+  /**
+   * The final PDF bytes. `flatten` bakes annotations into the page content (spec §6 Phase 2);
+   * it works on a copy, so the live document keeps its editable annotations.
+   */
+  save(options: SaveOptions = {}): Uint8Array {
+    const write =
       this.password === undefined ? 'garbage,compress' : 'garbage,compress,encrypt=keep';
-    const buffer = this.doc.saveToBuffer(options);
-    const bytes = buffer.asUint8Array().slice();
-    buffer.destroy();
-    return bytes;
+    const bytes = toBytes(this.doc.saveToBuffer(write));
+    if (!options.flatten) return bytes;
+
+    const copy = new mupdf.PDFDocument(bytes);
+    try {
+      if (copy.needsPassword() && this.password !== undefined)
+        copy.authenticatePassword(this.password);
+      copy.bake(true, false);
+      return toBytes(copy.saveToBuffer(write));
+    } finally {
+      copy.destroy();
+    }
   }
 
   close(): void {

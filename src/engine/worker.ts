@@ -2,7 +2,9 @@
 import * as Comlink from 'comlink';
 import { E2E_CRASH, ENGINE_READY, type EngineApi } from './api';
 import { EngineSession } from './document';
+import { registerFont } from './fonts';
 import { renderPageRGBA, searchDocument } from './render';
+import { selectText, textRuns } from './text';
 
 const session = new EngineSession();
 
@@ -24,12 +26,21 @@ const api: EngineApi = {
   async search(needle) {
     return searchDocument(session.doc, needle);
   },
-  async save() {
-    const bytes = session.save();
+  async textRuns(page) {
+    return textRuns(session.doc, page);
+  },
+  async selectText(page, a, b) {
+    return selectText(session.doc, page, a, b);
+  },
+  async save(options) {
+    const bytes = session.save(options);
     return Comlink.transfer(bytes, [bytes.buffer]);
   },
   async close() {
     session.close();
+  },
+  async registerFont(id, bytes) {
+    registerFont(id, bytes);
   },
 };
 
