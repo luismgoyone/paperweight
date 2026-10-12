@@ -328,3 +328,42 @@ write('invoice-31.pdf', makeInvoice('$31'));
   );
   write('scanned.pdf', doc.saveToBuffer('garbage,compress').asUint8Array());
 }
+
+// A flat form, drawn the way Word draws tables: borders are thin filled rectangles, label
+// cells are grey, blank cells aren't drawn at all, checkboxes are stroked squares. It has no
+// form fields. Coordinates below are from the top of the page.
+{
+  const doc = new mupdf.PDFDocument();
+  const font = doc.addSimpleFont(new mupdf.Font('Helvetica'));
+  const H = 792;
+  const ops = [];
+  const fill = (x, y, w, h, grey) => ops.push(`${grey} g ${x} ${H - y - h} ${w} ${h} re f`);
+  const text = (x, baseline, s) =>
+    ops.push(`0 g BT /F1 10 Tf ${x} ${H - baseline} Td (${escapePdfString(s)}) Tj ET`);
+  fill(50, 100, 150, 22, 0.85); // "Name" label cell
+  fill(50, 170, 150, 22, 0.85); // "TIN" label cell
+  text(56, 115, 'Name');
+  text(56, 137, 'Printed label');
+  text(56, 185, 'TIN');
+  // Checkboxes with their labels, inside a white cell that also holds text.
+  [
+    [70, 'Yes'],
+    [170, 'No'],
+    [270, 'Maybe'],
+  ].forEach(([x, label]) => {
+    ops.push(`0 G 0.5 w ${x} ${H - 163} 12 12 re S`);
+    text(x + 18, 161, label);
+  });
+  // Comb ticks along the bottom of the TIN cell.
+  for (let x = 220; x < 560; x += 20) fill(x, 188, 0.75, 4, 0);
+  // Borders.
+  for (const y of [100, 122, 144, 170, 192]) fill(50, y, 510.75, 0.75, 0);
+  for (const x of [50, 560]) fill(x, 100, 0.75, 92, 0);
+  fill(200, 100, 0.75, 22, 0);
+  fill(200, 170, 0.75, 22, 0);
+  doc.insertPage(
+    -1,
+    doc.addPage([0, 0, 612, 792], 0, doc.addObject({ Font: { F1: font } }), ops.join('\n')),
+  );
+  write('flat-form.pdf', doc.saveToBuffer('garbage,compress').asUint8Array());
+}

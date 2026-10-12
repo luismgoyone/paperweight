@@ -4,6 +4,9 @@ import type { FontFamily } from './fonts';
 /** A rectangle in PDF points, MuPDF page space (origin top-left, y grows downward). */
 export type Rect = { x: number; y: number; w: number; h: number };
 
+/** An empty box (or checkbox) found on a flat form, in page points. */
+export type Slot = { kind: 'text' | 'check'; rect: Rect };
+
 export type PageInfo = { index: number; width: number; height: number };
 
 export type SearchHit = { page: number; rects: Rect[] };
