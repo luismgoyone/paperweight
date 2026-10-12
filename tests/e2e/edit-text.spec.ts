@@ -116,3 +116,43 @@ test('Esc cancels an edit; undo restores the original text', async ({ page }) =>
   );
   expect(runs(doc).map((r) => r.text)).toContain('Monthly hosting');
 });
+
+test('moved text follows the pointer while dragging, before the drop', async ({ page }) => {
+  await openApp(page);
+  await expect(page.getByTestId('fonts-ready')).toBeAttached();
+  await openFixture(page, 'invoice.pdf');
+  await expect(page.locator('[data-page="1"] canvas[data-rendered]')).toBeAttached();
+  await zoom100(page);
+  await page.getByRole('button', { name: 'Edit text' }).click();
+  const at = await pagePoint(page, 1, 531, 192);
+  await page.mouse.click(at.x, at.y);
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('$21');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('v');
+
+  const sel = (await page.getByTestId('selection').boundingBox())!;
+  const from = { x: sel.x + sel.width / 2, y: sel.y + sel.height / 2 };
+  const to = await pagePoint(page, 1, 300, 330);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i++) {
+    await page.mouse.move(from.x + ((to.x - from.x) * i) / 8, from.y + ((to.y - from.y) * i) / 8);
+  }
+  // Mid-drag: the text itself is drawn at the pointer, not only an empty box.
+  const preview = page.getByTestId('move-preview');
+  await expect(preview).toBeVisible();
+  const box = (await preview.boundingBox())!;
+  expect(Math.abs(box.x + box.width / 2 - to.x)).toBeLessThan(4);
+  expect(Math.abs(box.y + box.height / 2 - to.y)).toBeLessThan(4);
+  const ink = await preview.evaluate((el) => {
+    const c = el as HTMLCanvasElement;
+    const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i]! + d[i + 1]! + d[i + 2]! < 300) n++;
+    return n;
+  });
+  expect(ink).toBeGreaterThan(10);
+  await page.mouse.up();
+  await expect(preview).toBeHidden();
+});
