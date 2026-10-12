@@ -3,6 +3,7 @@ import * as Comlink from 'comlink';
 import { E2E_CRASH, ENGINE_READY, type EngineApi } from './api';
 import { EngineSession } from './document';
 import { registerFont } from './fonts';
+import { listFields } from './forms';
 import { imageSize, registerImage } from './images';
 import { renderPageRGBA, searchDocument } from './render';
 import { selectText, textRuns } from './text';
@@ -26,6 +27,9 @@ const api: EngineApi = {
   },
   async search(needle) {
     return searchDocument(session.doc, needle);
+  },
+  async fields(page) {
+    return listFields(session.doc, page);
   },
   async textRuns(page) {
     return textRuns(session.doc, page);

@@ -120,3 +120,124 @@ write('corrupt.pdf', new TextEncoder().encode('%PDF-1.7\nthis is not really a pd
   );
   write('rotated.pdf', doc.saveToBuffer('garbage,compress').asUint8Array());
 }
+
+// An AcroForm (spec §9): text, multiline, read-only, checkbox, radio group, dropdown.
+{
+  const doc = new mupdf.PDFDocument();
+  const helv = doc.addSimpleFont(new mupdf.Font('Helvetica'));
+  const dr = doc.addObject({ Font: { Helv: helv } });
+  const resources = doc.addObject({ Font: { F1: helv } });
+  let content = '';
+  const label = (x, y, s) =>
+    (content += `BT /F1 10 Tf ${x} ${y} Td (${escapePdfString(s)}) Tj ET\n`);
+  label(72, 720, 'Name');
+  label(72, 680, 'Notes');
+  label(72, 600, 'Account (read-only)');
+  label(72, 560, 'Subscribe');
+  label(72, 520, 'Plan');
+  label(72, 480, 'Country');
+  label(72, 440, 'Signature date');
+  const pageObj = doc.addPage([0, 0, 612, 792], 0, resources, content);
+  doc.insertPage(-1, pageObj);
+  const page = doc.findPage(0);
+
+  const fields = doc.newArray();
+  const annots = doc.newArray();
+  const box = (x0, y0, x1, y1) => [x0, y0, x1, y1];
+  const onOff = (on) => {
+    const off = doc.addStream('', { BBox: [0, 0, 12, 12], Resources: {} });
+    const yes = doc.addStream('0 g 2 2 8 8 re f', { BBox: [0, 0, 12, 12], Resources: {} });
+    const n = doc.newDictionary();
+    n.put(on, yes);
+    n.put('Off', off);
+    return n;
+  };
+  const widget = (dict) => {
+    const obj = doc.addObject({
+      Type: doc.newName('Annot'),
+      Subtype: doc.newName('Widget'),
+      F: 4,
+      P: page,
+      ...dict,
+    });
+    annots.push(obj);
+    return obj;
+  };
+  const text = (name, rect, extra = {}) =>
+    fields.push(
+      widget({
+        FT: doc.newName('Tx'),
+        T: doc.newString(name),
+        Rect: rect,
+        DA: doc.newString('/Helv 10 Tf 0 g'),
+        ...extra,
+      }),
+    );
+
+  text('name', box(180, 712, 400, 728), { V: doc.newString('') });
+  text('notes', box(180, 640, 400, 692), { Ff: 4096, V: doc.newString('') }); // multiline
+  text('account', box(180, 592, 400, 608), { Ff: 1, V: doc.newString('ACCT-001') }); // read-only
+  text('dates.signed', box(180, 432, 300, 448), { V: doc.newString('') });
+
+  const check = widget({
+    FT: doc.newName('Btn'),
+    T: doc.newString('subscribe'),
+    Rect: box(180, 556, 192, 568),
+    V: doc.newName('Off'),
+    AS: doc.newName('Off'),
+  });
+  const checkAp = doc.newDictionary();
+  checkAp.put('N', onOff('Yes'));
+  check.put('AP', checkAp);
+  fields.push(check);
+
+  const radio = doc.addObject({
+    FT: doc.newName('Btn'),
+    T: doc.newString('plan'),
+    Ff: 32768 | 16384,
+    V: doc.newName('Off'),
+  });
+  const kids = doc.newArray();
+  ['basic', 'pro', 'team'].forEach((state, i) => {
+    const kid = widget({
+      Parent: radio,
+      Rect: box(180 + i * 60, 516, 192 + i * 60, 528),
+      AS: doc.newName('Off'),
+    });
+    const ap = doc.newDictionary();
+    ap.put('N', onOff(state));
+    kid.put('AP', ap);
+    kids.push(kid);
+  });
+  radio.put('Kids', kids);
+  fields.push(radio);
+
+  const opts = doc.newArray();
+  ['Canada', 'Mexico', 'United States'].forEach((o) => opts.push(doc.newString(o)));
+  fields.push(
+    widget({
+      FT: doc.newName('Ch'),
+      T: doc.newString('country'),
+      Ff: 131072,
+      Opt: opts,
+      Rect: box(180, 472, 330, 488),
+      DA: doc.newString('/Helv 10 Tf 0 g'),
+      V: doc.newString(''),
+    }),
+  );
+
+  page.put('Annots', annots);
+  doc
+    .getTrailer()
+    .get('Root')
+    .put(
+      'AcroForm',
+      doc.addObject({
+        Fields: fields,
+        DR: dr,
+        DA: doc.newString('/Helv 10 Tf 0 g'),
+        NeedAppearances: true,
+      }),
+    );
+  write('form.pdf', doc.saveToBuffer('garbage,compress').asUint8Array());
+}

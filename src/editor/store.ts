@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import { editedFileName } from '../shared/filename';
-import type { ImageAsset, Op, PageInfo, Point, Quad, SearchHit, TextRun } from '../shared/types';
+import type {
+  FormField,
+  ImageAsset,
+  Op,
+  PageInfo,
+  Point,
+  Quad,
+  SearchHit,
+  TextRun,
+} from '../shared/types';
 import { newId } from './ids';
 import { createEngineClient, createSerialQueue, type EngineClient } from './engine-client';
 import { loadFonts } from './fonts';
@@ -61,10 +70,12 @@ export type EditorState = {
   updateObject(id: string, fn: (o: EditorObject) => EditorObject | null): Promise<void>;
   undo(): Promise<void>;
   redo(): Promise<void>;
-  download(options?: { flatten?: boolean }): Promise<void>;
+  download(options?: { flatten?: boolean; flattenForms?: boolean }): Promise<void>;
   /** Existing text on a page (cached per page version). */
   getTextRuns(page: number): Promise<TextRun[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
+  /** Form widgets on a page with their current values. */
+  getFields(page: number): Promise<FormField[]>;
   /** Registers PNG/JPEG bytes for image ops (kept in memory for this tab only). */
   addImage(bytes: Uint8Array): Promise<ImageAsset>;
   setZoom(zoom: number): void;
@@ -469,6 +480,10 @@ export const useEditor = create<EditorState>()((set, get) => {
       const { width, height } = await engineOrThrow().registerImage(key, bytes);
       images.set(key, bytes);
       return { key, bytes, width, height };
+    },
+
+    getFields(page) {
+      return engineOrThrow().fields(page);
     },
 
     selectText(page, a, b) {

@@ -90,7 +90,24 @@ export type Op =
   | { kind: 'text.delete'; id: string; page: number }
   | { kind: 'image.add'; id: string; page: number; box: Rect; image: string }
   | { kind: 'image.update'; id: string; page: number; box: Rect; image: string }
-  | { kind: 'image.delete'; id: string; page: number };
+  | { kind: 'image.delete'; id: string; page: number }
+  | { kind: 'form.set'; field: string; value: string | boolean };
+
+export type FieldType = 'text' | 'checkbox' | 'radio' | 'choice' | 'signature' | 'button';
+
+/** One form widget on a page (a field with several widgets appears once per widget). */
+export type FormField = {
+  name: string;
+  type: FieldType;
+  rect: Rect;
+  value: string;
+  readOnly: boolean;
+  multiline: boolean;
+  maxLen: number;
+  /** For checkboxes and radio buttons: the value this widget sets when selected. */
+  onState: string | null;
+  options: string[];
+};
 
 /** Ops that get a checkpoint taken before them (redact, page delete; spec §3.3). */
 export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>([]);

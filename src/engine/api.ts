@@ -1,4 +1,13 @@
-import type { Op, OpenResult, PageInfo, Point, Quad, SearchHit, TextRun } from '../shared/types';
+import type {
+  FormField,
+  Op,
+  OpenResult,
+  PageInfo,
+  Point,
+  Quad,
+  SearchHit,
+  TextRun,
+} from '../shared/types';
 import type { ChangedPages, SaveOptions } from './document';
 
 /** The engine's Comlink surface (spec §3.2). Implemented in worker.ts. */
@@ -8,6 +17,7 @@ export interface EngineApi {
   render(page: number, scale: number): Promise<ImageBitmap>;
   search(needle: string): Promise<SearchHit[]>;
   textRuns(page: number): Promise<TextRun[]>;
+  fields(page: number): Promise<FormField[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
   save(options?: SaveOptions): Promise<Uint8Array>;
   close(): Promise<void>;

@@ -8,7 +8,12 @@ const CHECKPOINT_EVERY = 20;
 
 export type ChangedPages = number[] | 'all';
 
-export type SaveOptions = { flatten?: boolean };
+export type SaveOptions = {
+  /** Bake annotations into the page content. */
+  flatten?: boolean;
+  /** Bake form fields into the page content. */
+  flattenForms?: boolean;
+};
 
 function toBytes(buffer: mupdf.Buffer): Uint8Array {
   const bytes = buffer.asUint8Array().slice();
@@ -98,7 +103,9 @@ export class EngineSession {
     try {
       if (prefix === previous.length) {
         this.applyFrom(prefix, target);
-        return { changedPages: [...new Set(target.slice(prefix).flatMap(pagesTouched))] };
+        const touched = target.slice(prefix).map(pagesTouched);
+        if (touched.includes('all')) return { changedPages: 'all' };
+        return { changedPages: [...new Set((touched as number[][]).flat())] };
       }
       this.replay(target, prefix);
       return { changedPages: 'all' };
@@ -170,13 +177,13 @@ export class EngineSession {
     const write =
       this.password === undefined ? 'garbage,compress' : 'garbage,compress,encrypt=keep';
     const bytes = toBytes(this.doc.saveToBuffer(write));
-    if (!options.flatten) return bytes;
+    if (!options.flatten && !options.flattenForms) return bytes;
 
     const copy = new mupdf.PDFDocument(bytes);
     try {
       if (copy.needsPassword() && this.password !== undefined)
         copy.authenticatePassword(this.password);
-      copy.bake(true, false);
+      copy.bake(Boolean(options.flatten), Boolean(options.flattenForms));
       return toBytes(copy.saveToBuffer(write));
     } finally {
       copy.destroy();
