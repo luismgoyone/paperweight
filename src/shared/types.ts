@@ -116,7 +116,12 @@ export type Op =
   | { kind: 'page.delete'; pages: number[] }
   | { kind: 'page.insertBlank'; at: number; width: number; height: number }
   /** Pages of a registered document (see EngineApi.registerDocument), inserted before `at`. */
-  | { kind: 'page.insertFrom'; at: number; source: string; pages: number[] };
+  | { kind: 'page.insertFrom'; at: number; source: string; pages: number[] }
+  /**
+   * True redaction (spec §6 Phase 6): everything under the rects is removed for good (text,
+   * image pixels, vector graphics, annotations and form-field values) and black boxes drawn.
+   */
+  | { kind: 'redact'; page: number; rects: Rect[] };
 
 export type FieldType = 'text' | 'checkbox' | 'radio' | 'choice' | 'signature' | 'button';
 
@@ -136,4 +141,7 @@ export type FormField = {
 };
 
 /** Ops that get a checkpoint taken before them (redact, page delete; spec §3.3). */
-export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>(['page.delete']);
+export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>([
+  'page.delete',
+  'redact',
+]);

@@ -5,6 +5,7 @@ import { applyFormSet } from '../forms';
 import { applyImageOp } from './images';
 import { applySetTitle } from './meta';
 import { applyPageOp } from './pages';
+import { applyRedactOp } from './redact';
 import { applyTextOp } from './text-add';
 import { applyTextEditOp } from './text-edit';
 
@@ -46,6 +47,8 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
       case 'page.insertBlank':
       case 'page.insertFrom':
         return applyPageOp(doc, op);
+      case 'redact':
+        return applyRedactOp(doc, op);
       default:
         throw new Error(`Unknown operation "${(op as { kind: string }).kind}"`);
     }
