@@ -115,3 +115,69 @@ test('the CSP blocks a third-party request if one were attempted', async ({ page
   expect(result.outcome).toBe('blocked');
   expect(result.violations).toContain('connect-src');
 });
+
+test('signing, inserting an image and filling a form stay on the device', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const appOrigin = new URL(baseURL!).origin;
+  const after: string[] = [];
+  let loaded = false;
+  context.on('request', (r) => {
+    if (loaded && !r.url().startsWith('blob:') && !r.url().startsWith('data:')) after.push(r.url());
+    if (
+      !r.url().startsWith(appOrigin) &&
+      !r.url().startsWith('blob:') &&
+      !r.url().startsWith('data:')
+    )
+      after.push(r.url());
+  });
+  await page.goto('/#e2e');
+  await expect(page.getByTestId('fonts-ready')).toBeAttached({ timeout: 30_000 });
+  await page.waitForLoadState('networkidle');
+  loaded = true;
+
+  await page.getByTestId('file-input').setInputFiles('tests/fixtures/form.pdf');
+  await expect(page.locator('[data-page="1"] canvas[data-rendered]')).toBeAttached();
+  await page.getByLabel('Zoom', { exact: true }).selectOption('1');
+  const origin = (await page.locator('[data-page="1"]').boundingBox())!;
+
+  await page.getByRole('button', { name: 'Fill form' }).click();
+  await page.getByLabel('name', { exact: true }).fill('Private Person');
+  await page.getByLabel('subscribe').check();
+
+  await page.getByRole('button', { name: 'Sign' }).click();
+  const pad = (await page.getByTestId('signature-pad').boundingBox())!;
+  await page.mouse.move(pad.x + 50, pad.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(pad.x + 300, pad.y + 60, { steps: 6 });
+  await page.mouse.up();
+  await page.getByRole('button', { name: 'Use signature' }).click();
+  await page.mouse.click(origin.x + 400, origin.y + 380);
+
+  const png = await page.evaluate(async () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 20;
+    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'));
+    return [...new Uint8Array(await blob!.arrayBuffer())];
+  });
+  await page
+    .getByTestId('image-input')
+    .setInputFiles({ name: 'x.png', mimeType: 'image/png', buffer: Buffer.from(png) });
+  await page.mouse.click(origin.x + 100, origin.y + 300);
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download PDF' }).click();
+  await download;
+  await page.waitForTimeout(500);
+
+  expect(after).toEqual([]);
+  const storage = await page.evaluate(async () => ({
+    local: localStorage.length,
+    session: sessionStorage.length,
+    idb: (await indexedDB.databases()).length,
+    cookie: document.cookie,
+  }));
+  expect(storage).toEqual({ local: 0, session: 0, idb: 0, cookie: '' });
+});

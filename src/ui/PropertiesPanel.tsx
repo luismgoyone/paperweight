@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { EditorObject } from '../editor/objects';
 import { useEditor } from '../editor/store';
 import { PALETTE, useTools, type ShapeStyle } from '../editor/tools';
@@ -438,6 +438,51 @@ function SelectionControls({ object }: { object: EditorObject }) {
   );
 }
 
+function AssetThumb({ bytes, label }: { bytes: Uint8Array; label: string }) {
+  const url = useMemo(
+    () => URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/png' })),
+    [bytes],
+  );
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return <img src={url} alt={label} className="max-h-14 max-w-full object-contain" />;
+}
+
+function SignaturePicker() {
+  const signatures = useTools((s) => s.signatures);
+  const pending = useTools((s) => s.pending);
+  const setPending = useTools((s) => s.setPending);
+  const openDialog = useTools((s) => s.setSignatureDialogOpen);
+  return (
+    <Section title="Signatures">
+      {signatures.length > 0 && (
+        <p className="text-sm text-slate-600">Pick one, then click on the page to place it.</p>
+      )}
+      <div className="space-y-2">
+        {signatures.map((sig, i) => (
+          <button
+            key={sig.key}
+            type="button"
+            aria-label={`Signature ${i + 1}`}
+            aria-pressed={pending?.asset.key === sig.key}
+            onClick={() => setPending({ asset: sig, kind: 'signature' })}
+            className={`flex h-16 w-full items-center justify-center rounded-md border bg-white p-1 ${pending?.asset.key === sig.key ? 'border-blue-600 ring-2 ring-blue-600/20' : 'border-slate-200 hover:border-slate-300'}`}
+          >
+            <AssetThumb bytes={sig.bytes} label={`Signature ${i + 1}`} />
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => openDialog(true)}
+        className="text-sm font-medium text-blue-700 hover:text-blue-800"
+      >
+        + New signature
+      </button>
+      <p className="text-xs text-slate-500">Signatures are kept only until you close this tab.</p>
+    </Section>
+  );
+}
+
 /** Right panel (spec §5): properties for the current selection, or the active tool's defaults. */
 export function PropertiesPanel() {
   const pages = useEditor((s) => s.pages);
@@ -471,6 +516,23 @@ export function PropertiesPanel() {
           onChange={setShapeStyle}
           fill={tool === 'rect' || tool === 'ellipse'}
         />
+      </Section>
+    );
+  } else if (tool === 'sign') {
+    content = <SignaturePicker />;
+  } else if (tool === 'form') {
+    content = (
+      <Section title="Form">
+        <p className="text-sm text-slate-600">
+          Click a field to fill it in. Tab moves to the next field. Values are saved when you leave
+          a field.
+        </p>
+      </Section>
+    );
+  } else if (tool === 'image') {
+    content = (
+      <Section title="Image">
+        <p className="text-sm text-slate-600">Click on the page where the image should go.</p>
       </Section>
     );
   } else if (tool === 'ink') {

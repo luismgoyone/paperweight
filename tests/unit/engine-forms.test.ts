@@ -16,6 +16,13 @@ const reopen = (s: EngineSession, options = {}) => new mupdf.PDFDocument(s.save(
 const value = (doc: mupdf.Document, name: string) =>
   listFields(doc, 0).find((f) => f.name === name)!.value;
 
+describe('open', () => {
+  it('reports that the document has a form', () => {
+    const r = new EngineSession().open(fixture('form.pdf'));
+    expect(r.status === 'ok' && r.hasForm).toBe(true);
+  });
+});
+
 describe('listFields', () => {
   it('lists every widget with its type, value and geometry in document order', () => {
     const fields = listFields(session().doc, 0);

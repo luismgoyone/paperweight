@@ -9,7 +9,7 @@ export type PageInfo = { index: number; width: number; height: number };
 export type SearchHit = { page: number; rects: Rect[] };
 
 export type OpenResult =
-  | { status: 'ok'; pages: PageInfo[]; repaired: boolean }
+  | { status: 'ok'; pages: PageInfo[]; repaired: boolean; hasForm: boolean }
   | { status: 'needs-password' }
   | { status: 'wrong-password' }
   | { status: 'error'; message: string };

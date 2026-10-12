@@ -102,6 +102,7 @@ function PageIndicator() {
 function DownloadButton() {
   const download = useEditor((s) => s.download);
   const hasAnnotations = useEditor((s) => s.objects.some((o) => o.kind === 'annot'));
+  const hasForm = useEditor((s) => s.hasForm);
   const [open, setOpen] = useState(false);
 
   return (
@@ -159,6 +160,22 @@ function DownloadButton() {
               Annotations become part of the page
             </span>
           </button>
+          {hasForm && (
+            <button
+              role="menuitem"
+              type="button"
+              className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
+              onClick={() => {
+                setOpen(false);
+                void download({ flattenForms: true });
+              }}
+            >
+              Download with form flattened
+              <span className="block text-xs text-slate-500">
+                Filled fields can no longer be edited
+              </span>
+            </button>
+          )}
         </div>
       )}
     </div>

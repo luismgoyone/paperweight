@@ -39,6 +39,8 @@ export type EditorState = {
   error: string | null;
   passwordError: boolean;
   fileName: string;
+  /** The open document has fillable form fields. */
+  hasForm: boolean;
   /** Changes every time a document is opened; keys in-memory render caches. */
   docId: number;
   pages: PageInfo[];
@@ -220,6 +222,7 @@ export const useEditor = create<EditorState>()((set, get) => {
         set({
           status: 'ready',
           fileName: file.name,
+          hasForm: result.hasForm,
           docId: get().docId + 1,
           pages: result.pages,
           pageVersions: result.pages.map(() => 0),
@@ -259,6 +262,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     error: null,
     passwordError: false,
     fileName: '',
+    hasForm: false,
     docId: 0,
     pages: [],
     pageVersions: [],

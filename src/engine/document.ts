@@ -76,7 +76,13 @@ export class EngineSession {
     this.current = doc;
     this.password = password;
     this.checkpoints.set(0, bytes);
-    return { status: 'ok', pages: this.pageInfo(), repaired: doc.wasRepaired() };
+    const fields = doc.getTrailer().get('Root', 'AcroForm', 'Fields');
+    return {
+      status: 'ok',
+      pages: this.pageInfo(),
+      repaired: doc.wasRepaired(),
+      hasForm: fields.isArray() && fields.length > 0,
+    };
   }
 
   get checkpointIndices(): number[] {

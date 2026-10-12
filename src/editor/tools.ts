@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Color, TextSpec, TextStyle } from '../shared/types';
+import type { Color, ImageAsset, TextSpec, TextStyle } from '../shared/types';
 
 // Interaction state for the editing tools (spec §5). In-progress interactions live here and
 // become ops only on commit (spec §3.3).
@@ -15,7 +15,10 @@ export type Tool =
   | 'ellipse'
   | 'line'
   | 'arrow'
-  | 'note';
+  | 'note'
+  | 'sign'
+  | 'image'
+  | 'form';
 
 export type TextDraft = {
   id: string;
@@ -63,6 +66,11 @@ type ToolsState = {
   selectedId: string | null;
   draft: TextDraft | null;
   nudge: Nudge | null;
+  /** Signatures made this session (memory only; forgotten with the tab, spec §2). */
+  signatures: ImageAsset[];
+  /** An image or signature waiting to be placed with the next click on a page. */
+  pending: { asset: ImageAsset; kind: 'signature' | 'image' } | null;
+  signatureDialogOpen: boolean;
   shape: ShapeStyle;
   ink: ShapeStyle;
   setTool(tool: Tool): void;
@@ -73,6 +81,9 @@ type ToolsState = {
   addNudge(id: string, dx: number, dy: number): void;
   takeNudge(): Nudge | null;
   setShapeStyle(patch: Partial<ShapeStyle>): void;
+  addSignature(asset: ImageAsset): void;
+  setPending(pending: ToolsState['pending']): void;
+  setSignatureDialogOpen(open: boolean): void;
   setInkStyle(patch: Partial<ShapeStyle>): void;
 };
 
@@ -81,11 +92,27 @@ export const useTools = create<ToolsState>()((set, get) => ({
   selectedId: null,
   draft: null,
   nudge: null,
+  signatures: [],
+  pending: null,
+  signatureDialogOpen: false,
   shape: { color: [0.86, 0.15, 0.15], fill: null, width: 2, opacity: 1 },
   ink: { color: [0.15, 0.39, 0.92], fill: null, width: 2, opacity: 1 },
 
   setTool(tool) {
-    set({ tool, selectedId: tool === 'select' ? get().selectedId : null });
+    set({
+      tool,
+      selectedId: tool === 'select' ? get().selectedId : null,
+      pending: tool === 'sign' || tool === 'image' ? get().pending : null,
+    });
+  },
+  addSignature(asset) {
+    set({ signatures: [...get().signatures, asset] });
+  },
+  setPending(pending) {
+    set({ pending });
+  },
+  setSignatureDialogOpen(signatureDialogOpen) {
+    set({ signatureDialogOpen });
   },
   select(selectedId) {
     set({ selectedId });

@@ -1,4 +1,5 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useRef, type ReactNode } from 'react';
+import { fitWithin } from '../editor/signature';
 import { useEditor } from '../editor/store';
 import { useTools, type Tool } from '../editor/tools';
 
@@ -105,19 +106,109 @@ const GROUPS: ToolDef[][] = [
       ),
     },
   ],
+  [
+    {
+      tool: 'sign',
+      label: 'Sign',
+      icon: svg(<path d="M3 17c3-3 4-9 6-9s1 7 3 7 2-4 4-4 2 3 5 3M3 21h18" />),
+    },
+    {
+      tool: 'form',
+      label: 'Form fill',
+      icon: svg(
+        <>
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M7 9h6M7 13h10M7 17h4" />
+        </>,
+      ),
+    },
+    {
+      tool: 'image',
+      label: 'Image',
+      icon: svg(
+        <>
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-5-5L5 21" />
+        </>,
+      ),
+    },
+  ],
 ];
+
+const MAX_IMAGE_PX = 2000;
+
+/** Reads a PNG/JPEG, downscaling anything larger than 2000 px on the long edge. */
+async function readImage(file: File): Promise<Uint8Array> {
+  const bitmap = await createImageBitmap(file);
+  const { width, height } = fitWithin(bitmap.width, bitmap.height, MAX_IMAGE_PX);
+  if (width === bitmap.width && (file.type === 'image/png' || file.type === 'image/jpeg')) {
+    bitmap.close();
+    return new Uint8Array(await file.arrayBuffer());
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+  const type = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+  const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, type, 0.9));
+  if (!blob) throw new Error('The image could not be read');
+  return new Uint8Array(await blob.arrayBuffer());
+}
 
 export function Toolbar() {
   const tool = useTools((s) => s.tool);
   const setTool = useTools((s) => s.setTool);
   const fontsReady = useEditor((s) => s.fontsReady);
+  const addImage = useEditor((s) => s.addImage);
+  const showToast = useEditor((s) => s.showToast);
+  const imageInput = useRef<HTMLInputElement>(null);
+
+  const choose = (next: Tool) => {
+    const tools = useTools.getState();
+    if (next === 'image') {
+      imageInput.current?.click();
+      return;
+    }
+    setTool(next);
+    if (next === 'sign' && tools.signatures.length === 0) tools.setSignatureDialogOpen(true);
+    if (next === 'sign' && tools.signatures.length > 0 && !tools.pending) {
+      tools.setPending({
+        asset: tools.signatures[tools.signatures.length - 1]!,
+        kind: 'signature',
+      });
+    }
+  };
+
+  const placeImage = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const asset = await addImage(await readImage(file));
+      setTool('image');
+      useTools.getState().setPending({ asset, kind: 'image' });
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'The image could not be added');
+    }
+  };
 
   return (
     <div
       role="toolbar"
       aria-label="Tools"
-      className="flex h-11 shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-3"
+      className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3"
     >
+      <input
+        ref={imageInput}
+        type="file"
+        data-testid="image-input"
+        accept="image/png,image/jpeg"
+        className="hidden"
+        onChange={(e) => {
+          void placeImage(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
       {GROUPS.map((group, i) => (
         <Fragment key={i}>
           {i > 0 && <span className="mx-1.5 h-5 w-px bg-slate-200" />}
@@ -136,7 +227,7 @@ export function Toolbar() {
               }
               // Text needs the bundled fonts, which load right after the page.
               disabled={t.tool === 'text' && !fontsReady}
-              onClick={() => setTool(t.tool)}
+              onClick={() => choose(t.tool)}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
                 tool === t.tool
                   ? 'bg-blue-100 text-blue-700'

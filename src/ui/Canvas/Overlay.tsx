@@ -10,6 +10,7 @@ import { firstBaselineOffset } from '../../shared/fonts';
 import type { AnnotSpec, PageInfo, Point, Quad, Rect, TextRun, TextSpec } from '../../shared/types';
 import { cssColor } from '../colors';
 import { measureTextWidth } from '../measure';
+import { FormLayer } from './FormLayer';
 import { TextEditor } from './TextEditor';
 
 const SNAP_PX = 6; // snap threshold in screen pixels
@@ -19,7 +20,40 @@ type Gesture =
   | { kind: 'move'; object: EditorObject; start: Point; moved: EditorObject | null }
   | { kind: 'markup'; tool: 'highlight' | 'underline' | 'strikeout'; start: Point }
   | { kind: 'ink'; points: Point[] }
-  | { kind: 'shape'; tool: 'rect' | 'ellipse' | 'line' | 'arrow'; start: Point; end: Point };
+  | { kind: 'shape'; tool: 'rect' | 'ellipse' | 'line' | 'arrow'; start: Point; end: Point }
+  | {
+      kind: 'resize';
+      object: EditorObject & { kind: 'image' };
+      corner: Corner;
+      resized: Rect | null;
+    };
+
+type Corner = 'nw' | 'ne' | 'sw' | 'se';
+
+const SIGNATURE_WIDTH = 150; // default placed width in points
+const MAX_IMAGE_WIDTH = 300;
+
+/**
+ * Resizes a box by dragging one corner, keeping its aspect ratio; the opposite corner stays
+ * put. The pointer is projected onto the box's diagonal, so dragging in any direction works.
+ */
+function resizeBox(box: Rect, corner: Corner, p: Point): Rect {
+  const fixed = {
+    x: corner.includes('w') ? box.x + box.w : box.x,
+    y: corner.includes('n') ? box.y + box.h : box.y,
+  };
+  const dx = Math.abs(p.x - fixed.x);
+  const dy = Math.abs(p.y - fixed.y);
+  const scale = (dx * box.w + dy * box.h) / (box.w * box.w + box.h * box.h);
+  const w = Math.max(8, box.w * scale);
+  const h = (w * box.h) / box.w;
+  return {
+    x: corner.includes('w') ? fixed.x - w : fixed.x,
+    y: corner.includes('n') ? fixed.y - h : fixed.y,
+    w,
+    h,
+  };
+}
 
 /** Snap targets: existing text runs plus other added objects (spec §6 Phase 2). */
 function snapTargets(
@@ -265,6 +299,32 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
       case 'arrow':
         gesture.current = { kind: 'shape', tool, start: p, end: p };
         return;
+      case 'sign':
+      case 'image': {
+        const pending = useTools.getState().pending;
+        if (!pending) {
+          if (tool === 'sign') useTools.getState().setSignatureDialogOpen(true);
+          return;
+        }
+        const { asset } = pending;
+        const width =
+          pending.kind === 'signature'
+            ? SIGNATURE_WIDTH
+            : Math.min(MAX_IMAGE_WIDTH, asset.width * 0.75, page.width - 20);
+        const height = (width * asset.height) / asset.width;
+        const id = newId();
+        const box = { x: p.x - width / 2, y: p.y - height / 2, w: width, h: height };
+        void commit({ kind: 'image.add', id, page: page.index, box, image: asset.key }).then(() => {
+          // Signatures can be placed again (the picker stays up); a picked image is placed once.
+          if (pending.kind === 'image') {
+            useTools.getState().setTool('select');
+            select(id);
+          }
+        });
+        return;
+      }
+      case 'form':
+        return;
       case 'note': {
         const id = newId();
         void commit({
@@ -330,6 +390,10 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         g.end = e.shiftKey ? constrain(g.tool, g.start, p) : p;
         setPreview({ annot: shapeAnnot(g) });
         return;
+      case 'resize':
+        g.resized = resizeBox(g.object.box, g.corner, p);
+        setPreview({ moved: { ...g.object, box: g.resized } });
+        return;
     }
   };
 
@@ -341,6 +405,9 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     switch (g.kind) {
       case 'move':
         if (g.moved) await commit(objectOp(g.moved, 'update'));
+        break;
+      case 'resize':
+        if (g.resized) await commit(objectOp({ ...g.object, box: g.resized }, 'update'));
         break;
       case 'markup': {
         const quads = await selectText(page.index, g.start, p);
@@ -425,6 +492,9 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     line: 'crosshair',
     arrow: 'crosshair',
     note: 'copy',
+    sign: 'copy',
+    image: 'copy',
+    form: 'default',
   };
 
   const nudge = useTools((s) => s.nudge);
@@ -520,6 +590,36 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
           />
         )}
       </svg>
+      {tool === 'select' && shownSelection?.kind === 'image' && (
+        <>
+          {(['nw', 'ne', 'sw', 'se'] as Corner[]).map((corner) => {
+            const b = shownSelection.box;
+            const x = corner.includes('w') ? b.x : b.x + b.w;
+            const y = corner.includes('n') ? b.y : b.y + b.h;
+            return (
+              <div
+                key={corner}
+                data-testid={`handle-${corner}`}
+                aria-hidden
+                className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 border border-blue-600 bg-white"
+                style={{
+                  left: x * zoom,
+                  top: y * zoom,
+                  cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize',
+                }}
+                onPointerDown={(e) => {
+                  if (e.button !== 0 || !selected || selected.kind !== 'image') return;
+                  e.stopPropagation();
+                  e.preventDefault();
+                  layer.current!.setPointerCapture(e.pointerId);
+                  gesture.current = { kind: 'resize', object: selected, corner, resized: null };
+                }}
+              />
+            );
+          })}
+        </>
+      )}
+      {tool === 'form' && <FormLayer page={page} zoom={zoom} />}
       {draft && draft.page === page.index && (
         <TextEditor
           key={draft.id}
