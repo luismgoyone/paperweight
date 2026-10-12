@@ -1,6 +1,8 @@
-# PDF Editor
+# Paperweight
 
-A free PDF editor that runs entirely in your browser. **Files never leave your device.**
+<img src="public/favicon.svg" alt="" width="64" height="64" />
+
+Paperweight is a free PDF editor that runs entirely in your browser. **Files never leave your device.**
 
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.

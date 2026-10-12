@@ -265,7 +265,7 @@ export function TopBar({ searchInput }: { searchInput: RefObject<HTMLInputElemen
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-neutral-200 bg-white px-4">
       <div className="flex items-center gap-2">
         <img src="/favicon.svg" alt="" className="h-6 w-6" />
-        <span className="text-sm font-semibold text-neutral-900">PDF Editor</span>
+        <span className="text-sm font-semibold text-neutral-900">Paperweight</span>
       </div>
       {ready && (
         <>

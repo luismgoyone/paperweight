@@ -1,5 +1,5 @@
 {
-  "name": "pdf-editor",
+  "name": "paperweight",
   "version": "0.1.0",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,7 @@
     "prebuild": "node scripts/copy-ocr-assets.mjs"
   },
   "license": "AGPL-3.0-or-later",
-  "description": "Browser-only, privacy-first PDF editor. Files never leave your device.",
+  "description": "Paperweight: a browser-only, privacy-first PDF editor. Files never leave your device.",
   "dependencies": {
     "comlink": "^4.4.2",
     "docx": "^9.10.0",
