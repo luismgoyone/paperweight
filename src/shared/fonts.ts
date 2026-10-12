@@ -58,6 +58,14 @@ export function styleForPdfFont(pdfFontName: string): FontStyleKey {
   return { bold: /bold|black|heavy|semibold/.test(name), italic: /italic|oblique/.test(name) };
 }
 
+/** Script fonts for typed signatures (spec §4). Used only to draw the signature image. */
+export const SCRIPT_FONTS = [
+  { family: 'Dancing Script', file: 'fonts/DancingScript.ttf' },
+  { family: 'Great Vibes', file: 'fonts/GreatVibes-Regular.ttf' },
+] as const;
+
+export type ScriptFont = (typeof SCRIPT_FONTS)[number]['family'];
+
 /** Line height of added text, as a multiple of the font size (also used by the editor overlay). */
 export const LINE_HEIGHT = 1.2;
 

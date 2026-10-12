@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import * as mupdf from 'mupdf';
 import { describe, expect, it } from 'vitest';
-import { ALL_FONTS, familyForPdfFont, fontFile, fontId } from '../../src/shared/fonts';
+import {
+  ALL_FONTS,
+  SCRIPT_FONTS,
+  familyForPdfFont,
+  fontFile,
+  fontId,
+} from '../../src/shared/fonts';
 
 describe('bundled fonts', () => {
   it('has 6 families × 4 styles', () => {
@@ -42,5 +48,12 @@ describe('familyForPdfFont (spec §4)', () => {
     ['', 'Inter'],
   ])('%s -> %s', (name, family) => {
     expect(familyForPdfFont(name)).toBe(family);
+  });
+});
+
+describe('signature script fonts', () => {
+  it.each(SCRIPT_FONTS.map((f) => [f.family, f.file]))('%s loads', (family, file) => {
+    const bytes = readFileSync(new URL(`../../public/${file}`, import.meta.url));
+    expect(new mupdf.Font(family, bytes).encodeCharacter('J')).toBeGreaterThan(0);
   });
 });
