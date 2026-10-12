@@ -21,6 +21,7 @@ type Gesture =
   | { kind: 'markup'; tool: 'highlight' | 'underline' | 'strikeout'; start: Point }
   | { kind: 'ink'; points: Point[] }
   | { kind: 'shape'; tool: 'rect' | 'ellipse' | 'line' | 'arrow'; start: Point; end: Point }
+  | { kind: 'redact'; start: Point; end: Point }
   | {
       kind: 'resize';
       object: EditorObject & { kind: 'image' };
@@ -189,7 +190,9 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
   const layer = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const runs = useRef<TextRun[]>([]);
+  const redactMarks = useTools((s) => s.redactMarks);
   const [preview, setPreview] = useState<{
+    redact?: Rect;
     annot?: AnnotSpec;
     quads?: Quad[];
     moved?: EditorObject;
@@ -384,6 +387,9 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         });
         return;
       }
+      case 'redact':
+        gesture.current = { kind: 'redact', start: p, end: p };
+        return;
       case 'note': {
         const id = newId();
         void commit({
@@ -456,6 +462,10 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
         g.end = e.shiftKey ? constrain(g.tool, g.start, p) : p;
         setPreview({ annot: shapeAnnot(g) });
         return;
+      case 'redact':
+        g.end = p;
+        setPreview({ redact: normalize(g.start, g.end) });
+        return;
       case 'resize':
         g.resized = resizeBox(g.object.box, g.corner, p);
         setPreview({ moved: { ...g.object, box: g.resized } });
@@ -475,6 +485,13 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
       case 'resize':
         if (g.resized) await commit(objectOp({ ...g.object, box: g.resized }, 'update'));
         break;
+      case 'redact': {
+        // Marking only: nothing is removed until "Apply redactions" is confirmed.
+        const rect = normalize(g.start, p);
+        if (rect.w > 2 && rect.h > 2)
+          useTools.getState().addRedactMarks([{ page: page.index, rect }]);
+        break;
+      }
       case 'markup': {
         const quads = await selectText(page.index, g.start, p);
         if (quads.length) {
@@ -578,6 +595,7 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
     image: 'copy',
     form: 'default',
     edit: 'text',
+    redact: 'crosshair',
   };
 
   const nudge = useTools((s) => s.nudge);
@@ -665,6 +683,22 @@ export function Overlay({ page, zoom }: { page: PageInfo; zoom: number }) {
             />
           ),
         )}
+        {[
+          ...redactMarks.filter((m) => m.page === page.index).map((m) => m.rect),
+          ...(preview.redact ? [preview.redact] : []),
+        ].map((r, i) => (
+          <rect
+            key={i}
+            data-testid="redact-mark"
+            x={r.x * zoom}
+            y={r.y * zoom}
+            width={r.w * zoom}
+            height={r.h * zoom}
+            fill="rgb(220 38 38 / 0.15)"
+            stroke="#dc2626"
+            strokeDasharray="4 3"
+          />
+        ))}
         {tool === 'edit' && hover && !draft && (
           <rect
             data-testid="edit-hover"

@@ -95,6 +95,7 @@ export function createEngineClient(): EngineClient {
     extract: (pages) => call(() => remote.extract(pages)),
     retainDocuments: (keys) => call(() => remote.retainDocuments(keys)),
     textEditInfo: (id) => call(() => remote.textEditInfo(id)),
+    compress: (options) => call(() => remote.compress(options)),
     terminate: () => {
       crashed = true;
       remote[Comlink.releaseProxy]();

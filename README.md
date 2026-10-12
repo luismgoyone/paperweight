@@ -5,9 +5,9 @@ A free PDF editor that runs entirely in your browser. **Files never leave your d
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.
 
-> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–5 (viewer, markup, add text,
-> signatures, forms, images, page management, editing existing text) are built; see the
-> [Roadmap](#roadmap).
+> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–6 (viewer, markup, add text,
+> signatures, forms, images, page management, editing existing text, redaction, compression,
+> passwords) are built; see the [Roadmap](#roadmap).
 
 ## Privacy guarantees
 
@@ -31,6 +31,17 @@ Referrer-Policy: no-referrer
 ```
 
 ## Features
+
+### Redact, compress, passwords (Phase 6)
+
+- **Redact**: drag over anything (or "Redact all matches" from search), review the marks, and
+  confirm. The content under each area is really removed from the file: text, image pixels,
+  drawings, and any notes or form-field values there. Black boxes replace it.
+- **Compress** (download menu): resamples oversized images, trims fonts and merges duplicate
+  data; shows the size before and after. Never makes a file larger.
+- **Password** (download menu): protect with an open password (AES-256) and choose what's
+  allowed (printing, copying, editing, comments, forms), or remove the password from a file you
+  opened with it. Passwords are never stored.
 
 ### Edit existing text (Phase 5)
 
@@ -144,7 +155,7 @@ UI mockups made with Google Stitch live in [`docs/design/`](docs/design/).
 - [x] **Phase 3: Signatures, forms and images**
 - [x] **Phase 4: Page management**: reorder, rotate, delete, insert, merge, extract, split
 - [x] **Phase 5: Edit existing text in the same font**
-- [ ] Phase 6: Redact, compress, passwords
+- [x] **Phase 6: Redact, compress, passwords**
 - [ ] Phase 7: OCR (Tesseract.js, self-hosted)
 - [ ] Phase 8: PDF → Word
 

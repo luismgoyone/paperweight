@@ -145,6 +145,18 @@ const GROUPS: ToolDef[][] = [
       ),
     },
   ],
+  [
+    {
+      tool: 'redact',
+      label: 'Redact',
+      icon: svg(
+        <>
+          <rect x="3" y="9" width="18" height="6" rx="1" fill="currentColor" />
+          <path d="M3 5h8M3 19h12" />
+        </>,
+      ),
+    },
+  ],
 ];
 
 const MAX_IMAGE_PX = 2000;

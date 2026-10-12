@@ -123,6 +123,15 @@ export type Op =
    */
   | { kind: 'redact'; page: number; rects: Rect[] };
 
+/** What a password-protected PDF allows without the permissions (owner) password. */
+export type Permissions = {
+  print: boolean;
+  copy: boolean;
+  edit: boolean;
+  annotate: boolean;
+  forms: boolean;
+};
+
 export type FieldType = 'text' | 'checkbox' | 'radio' | 'choice' | 'signature' | 'button';
 
 /** One form widget on a page (a field with several widgets appears once per widget). */

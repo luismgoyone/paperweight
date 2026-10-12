@@ -8,6 +8,7 @@ import type {
   PageInfo,
   Point,
   Quad,
+  Rect,
   SearchHit,
   TextRun,
 } from '../shared/types';
@@ -15,6 +16,7 @@ import { newId } from './ids';
 import { createEngineClient, createSerialQueue, type EngineClient } from './engine-client';
 import { loadFonts } from './fonts';
 import { History } from './history';
+import type { SaveOptions } from '../engine/document';
 import type { TextEditInfo } from '../engine/ops/text-add';
 import { foldObjects, type EditorObject } from './objects';
 import { useTools } from './tools';
@@ -77,7 +79,7 @@ export type EditorState = {
   updateObject(id: string, fn: (o: EditorObject) => EditorObject | null): Promise<void>;
   undo(): Promise<void>;
   redo(): Promise<void>;
-  download(options?: { flatten?: boolean; flattenForms?: boolean }): Promise<void>;
+  download(options?: SaveOptions): Promise<void>;
   /** Existing text on a page (cached per page version). */
   getTextRuns(page: number): Promise<TextRun[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
@@ -91,6 +93,14 @@ export type EditorState = {
   insertPassword: { fileName: string; wrong: boolean } | null;
   submitInsertPassword(password: string): void;
   cancelInsertPassword(): void;
+  /** The open document was password-protected. */
+  isProtected: boolean;
+  /** A smaller copy of the document (not downloaded yet). */
+  compress(dpi: number): Promise<{ bytes: Uint8Array; before: number; after: number }>;
+  /** Downloads bytes produced by an export (e.g. compress) under the edited file name. */
+  saveExport(bytes: Uint8Array): void;
+  /** Applies every marked redaction (one op per page). */
+  applyRedactions(marks: { page: number; rect: Rect }[]): Promise<void>;
   /** Downloads a new PDF made of these pages. */
   extractPages(pages: number[]): Promise<void>;
   /** Downloads one PDF per range (inclusive, 0-based). */
@@ -330,6 +340,7 @@ export const useEditor = create<EditorState>()((set, get) => {
           status: 'ready',
           fileName: file.name,
           hasForm: result.hasForm,
+          isProtected: password !== undefined,
           docId: get().docId + 1,
           pages: result.pages,
           pageVersions: result.pages.map(() => 0),
@@ -371,6 +382,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     fileName: '',
     hasForm: false,
     insertPassword: null,
+    isProtected: false,
     docId: 0,
     pages: [],
     pageVersions: [],
@@ -455,6 +467,32 @@ export const useEditor = create<EditorState>()((set, get) => {
     cancelInsertPassword() {
       pendingInsert = null;
       set({ insertPassword: null });
+    },
+
+    compress(dpi) {
+      return exclusive(() => engineOrThrow().compress({ dpi }));
+    },
+
+    saveExport(bytes) {
+      saveFile(bytes, editedFileName(get().fileName));
+    },
+
+    applyRedactions(marks) {
+      const byPage = new Map<number, Rect[]>();
+      for (const m of marks) byPage.set(m.page, [...(byPage.get(m.page) ?? []), m.rect]);
+      const ops: Op[] = [...byPage].map(([page, rects]) => ({ kind: 'redact', page, rects }));
+      // All pages in one step: a download can't slip in between and save a half-redacted file.
+      return exclusive(async () => {
+        for (const op of ops) history.push(op);
+        try {
+          await sync();
+        } catch (e) {
+          for (let i = 0; i < ops.length; i++) history.rejectLast();
+          set(historyFlags());
+          await sync().catch(() => undefined);
+          get().showToast(`The redactions could not be applied: ${messageOf(e)}`);
+        }
+      });
     },
 
     async extractPages(pages) {

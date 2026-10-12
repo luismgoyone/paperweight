@@ -56,6 +56,10 @@ const api: EngineApi = {
   async textEditInfo(id) {
     return textEditInfo(id) ?? null;
   },
+  async compress(options) {
+    const result = session.compress(options);
+    return Comlink.transfer(result, [result.bytes.buffer]);
+  },
   async retainDocuments(keys) {
     retainDocuments(keys);
   },

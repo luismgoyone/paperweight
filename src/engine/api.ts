@@ -29,6 +29,8 @@ export interface EngineApi {
   registerDocument(key: string, bytes: Uint8Array, password?: string): Promise<RegisterResult>;
   /** Which font an edited text object is drawn in (for the substitution notice, spec §4). */
   textEditInfo(id: string): Promise<TextEditInfo | null>;
+  /** A smaller copy of the current document (spec §6 Phase 6); the document is unchanged. */
+  compress(options: { dpi: number }): Promise<{ bytes: Uint8Array; before: number; after: number }>;
   /** Forgets registered documents except these keys. */
   retainDocuments(keys: string[]): Promise<void>;
   /** A new PDF of these pages of the current document (extract / split). */

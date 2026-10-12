@@ -1,5 +1,11 @@
 import * as mupdf from 'mupdf';
-import { DESTRUCTIVE_KINDS, type Op, type OpenResult, type PageInfo } from '../shared/types';
+import {
+  DESTRUCTIVE_KINDS,
+  type Op,
+  type OpenResult,
+  type PageInfo,
+  type Permissions,
+} from '../shared/types';
 import { ENGINE_BROKEN } from './api';
 import { downsampleImages } from './compress';
 import { graftPages } from './graft';
@@ -9,14 +15,6 @@ const PDF_MIME = 'application/pdf';
 const CHECKPOINT_EVERY = 20;
 
 export type ChangedPages = number[] | 'all';
-
-export type Permissions = {
-  print: boolean;
-  copy: boolean;
-  edit: boolean;
-  annotate: boolean;
-  forms: boolean;
-};
 
 /** Password protection on export (spec §6 Phase 6). */
 export type Security =

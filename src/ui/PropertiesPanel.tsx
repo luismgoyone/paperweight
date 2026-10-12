@@ -5,6 +5,7 @@ import { PALETTE, useTools, type ShapeStyle } from '../editor/tools';
 import { FONT_FAMILIES, LINE_HEIGHT, type FontFamily } from '../shared/fonts';
 import type { AnnotSpec, Color, TextAlign, TextSpec, TextStyle } from '../shared/types';
 import { colorToHex, cssColor, hexToColor, sameColor } from './colors';
+import { RedactConfirm } from './dialogs/RedactConfirm';
 import { measureTextWidth } from './measure';
 
 // Edits to a selected object go through `updateObject`, which applies the change to the
@@ -541,6 +542,56 @@ function SignaturePicker() {
   );
 }
 
+function RedactionSection() {
+  const marks = useTools((s) => s.redactMarks);
+  const clear = useTools((s) => s.clearRedactMarks);
+  const applyRedactions = useEditor((s) => s.applyRedactions);
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <Section title="Redaction">
+      <p className="text-sm text-slate-700" data-testid="redact-count">
+        {marks.length === 0
+          ? 'Drag over anything you want removed.'
+          : `${marks.length} area${marks.length === 1 ? '' : 's'} marked`}
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={!marks.length}
+          onClick={clear}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          Clear marks
+        </button>
+        <button
+          type="button"
+          disabled={!marks.length}
+          onClick={() => setConfirming(true)}
+          className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          Apply redactions
+        </button>
+      </div>
+      <p className="text-xs text-slate-500">
+        Marked content is permanently removed: text, images and drawings under each area. Black
+        boxes replace it.
+      </p>
+      {confirming && (
+        <RedactConfirm
+          count={marks.length}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => {
+            setConfirming(false);
+            const applying = [...marks];
+            clear();
+            void applyRedactions(applying);
+          }}
+        />
+      )}
+    </Section>
+  );
+}
+
 /** Right panel (spec §5): properties for the current selection, or the active tool's defaults. */
 export function PropertiesPanel() {
   const pages = useEditor((s) => s.pages);
@@ -556,6 +607,7 @@ export function PropertiesPanel() {
   const setInkStyle = useTools((s) => s.setInkStyle);
   const selected = objects.find((o) => o.id === selectedId);
   const page = pages[currentPage];
+  const redactCount = useTools((s) => s.redactMarks.length);
 
   let content: ReactNode;
   if (draft) {
@@ -576,6 +628,8 @@ export function PropertiesPanel() {
         />
       </Section>
     );
+  } else if (tool === 'redact' || redactCount > 0) {
+    content = <RedactionSection />;
   } else if (tool === 'sign') {
     content = <SignaturePicker />;
   } else if (tool === 'form') {
