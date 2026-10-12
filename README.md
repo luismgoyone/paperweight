@@ -39,6 +39,9 @@ Referrer-Policy: no-referrer
   paragraphs with their sizes, bold/italic and alignment, images, and simple tables detected
   from column-aligned text. It's best effort and the menu says so: complex layouts won't
   round-trip exactly. Word → PDF is out of scope (no fully client-side renderer).
+- A scanned page with a text layer (from OCR here or from the scanner) exports as its text,
+  without the page image. Images are capped at 200 dpi, and pages are fitted to Word's size
+  limits. Multi-column layouts aren't reflowed column by column.
 
 ### OCR (Phase 7)
 

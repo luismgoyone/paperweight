@@ -26,6 +26,11 @@ type Line = {
 };
 
 const EDGE = 2; // points: how close edges must be to count as aligned
+const IMAGE_DPI = 200;
+// An image covering this much of a page that also has text is the page itself: a scan with
+// a text layer (OCR, here or by the scanner). Word gets the text, which is what's editable;
+// an inline page-sized image would push all of it onto the next page anyway.
+const PAGE_IMAGE = 0.8;
 
 function toColor(c: mupdf.Color): Color {
   if (c.length === 3) return [c[0], c[1], c[2]];
@@ -113,7 +118,7 @@ type Column = { x0: number; x1: number };
 const matches = (cell: Cell, col: Column) =>
   Math.abs(cell.x0 - col.x0) < EDGE || Math.abs(cell.x1 - col.x1) < EDGE;
 
-/** Finds tables: ≥2 consecutive rows of ≥2 cells whose cells line up on shared columns. */
+/** Finds tables: consecutive rows (≥2, or ≥3 for two columns) of ≥2 cells whose cells line up on shared columns. */
 function findTables(rows: Line[]): { start: number; end: number; columns: Column[] }[] {
   const tables: { start: number; end: number; columns: Column[] }[] = [];
   let i = 0;
@@ -133,7 +138,8 @@ function findTables(rows: Line[]): { start: number; end: number; columns: Column
       if (matched.length !== row.cells.length || matched.length < 2) break;
       j++;
     }
-    if (j - i >= 2) {
+    // Two rows of two cells is as often a label/value pair or a tabbed list as a table.
+    if (j - i >= (columns.length > 2 ? 2 : 3)) {
       tables.push({ start: i, end: j, columns: columns.sort((a, b) => a.x0 - b.x0) });
       i = j;
     } else {
@@ -165,28 +171,55 @@ function pageModel(doc: mupdf.Document, index: number): DocPage {
   const width = x1 - x0;
   const height = y1 - y0;
   const rawLines: Char[][] = [];
-  const images: { top: number; block: DocBlock }[] = [];
+  const images: { top: number; area: number; block: DocBlock }[] = [];
   let line: Char[] = [];
   const stext = page.toStructuredText('preserve-images');
   try {
     stext.walk({
       onImageBlock(bbox, _transform, image) {
+        const width = bbox[2] - bbox[0];
+        const height = bbox[3] - bbox[1];
+        if (width <= 0 || height <= 0) return;
+        const owned: mupdf.Pixmap[] = [];
         try {
           let pix = image.toPixmap();
+          owned.push(pix);
           const cs = pix.getColorSpace();
-          if (cs && !cs.isRGB() && !cs.isGray())
+          if (cs && !cs.isRGB() && !cs.isGray()) {
             pix = pix.convertToColorSpace(mupdf.ColorSpace.DeviceRGB, pix.getAlpha() > 0);
+            owned.push(pix);
+          }
+          // No more pixels than the image shows at IMAGE_DPI: a 300 dpi scan would otherwise
+          // be carried at full size through the worker, the UI and the zip.
+          const w = pix.getWidth();
+          const h = pix.getHeight();
+          const scale = Math.min(
+            1,
+            ((width / 72) * IMAGE_DPI) / w,
+            ((height / 72) * IMAGE_DPI) / h,
+          );
+          if (scale < 0.8) {
+            pix = pix.warp(
+              [
+                [0, 0],
+                [w, 0],
+                [w, h],
+                [0, h],
+              ],
+              Math.max(1, Math.round(w * scale)),
+              Math.max(1, Math.round(h * scale)),
+            );
+            owned.push(pix);
+          }
           images.push({
             top: bbox[1],
-            block: {
-              kind: 'image',
-              png: pix.asPNG(),
-              width: bbox[2] - bbox[0],
-              height: bbox[3] - bbox[1],
-            },
+            area: width * height,
+            block: { kind: 'image', png: pix.asPNG(), width, height },
           });
         } catch {
           // An image that can't be decoded is left out of the export.
+        } finally {
+          for (const p of owned) p.destroy();
         }
       },
       onChar(c, _origin, font, size, quad, color) {
@@ -227,18 +260,36 @@ function pageModel(doc: mupdf.Document, index: number): DocPage {
   }
   for (const row of rows) row.cells.sort((a, b) => a.x0 - b.x0);
 
-  const blocks: { top: number; block: DocBlock }[] = [...images];
+  const blocks: { top: number; block: DocBlock }[] = rows.length
+    ? images.filter((i) => i.area < width * height * PAGE_IMAGE)
+    : [...images];
   const tables = findTables(rows);
   const inTable = new Set<number>();
   for (const t of tables) {
     const tableRows: DocRun[][][] = [];
     for (let r = t.start; r < t.end; r++) {
       inTable.add(r);
+      // Every cell goes to its nearest column; cells sharing a column are joined.
+      const byColumn: Cell[][] = t.columns.map(() => []);
+      for (const cell of rows[r]!.cells) {
+        const distance = (col: Column) =>
+          Math.min(Math.abs(cell.x0 - col.x0), Math.abs(cell.x1 - col.x1));
+        let best = 0;
+        t.columns.forEach((col, k) => {
+          if (distance(col) < distance(t.columns[best]!)) best = k;
+        });
+        byColumn[best]!.push(cell);
+      }
       tableRows.push(
-        t.columns.map((col) => {
-          const cell = rows[r]!.cells.find((c) => matches(c, col));
-          return cell ? trimRuns(runsOf(cell.chars)) : [];
-        }),
+        byColumn.map((cells) =>
+          trimRuns(
+            cells.flatMap((c, k) =>
+              k === 0
+                ? runsOf(c.chars)
+                : [{ ...runsOf(c.chars)[0]!, text: ' ' }, ...runsOf(c.chars)],
+            ),
+          ),
+        ),
       );
     }
     blocks.push({ top: rows[t.start]!.top, block: { kind: 'table', rows: tableRows } });

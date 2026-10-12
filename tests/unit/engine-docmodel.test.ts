@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs';
 import * as mupdf from 'mupdf';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { documentModel } from '../../src/engine/docmodel';
+import { EngineSession } from '../../src/engine/document';
+import { registerFont } from '../../src/engine/fonts';
+import { ALL_FONTS, fontFile, fontId } from '../../src/shared/fonts';
 import type { DocBlock, DocRun } from '../../src/shared/types';
 import { fixture } from './helpers';
 
@@ -16,6 +20,17 @@ function pdf(content: string, fonts: Record<string, string> = { F1: 'Helvetica' 
   doc.insertPage(-1, doc.addPage([0, 0, 612, 792], 0, doc.addObject({ Font: dict }), content));
   return doc.saveToBuffer('').asUint8Array().slice();
 }
+
+beforeAll(() => {
+  for (const f of ALL_FONTS) {
+    registerFont(
+      fontId(f.family, f),
+      new Uint8Array(
+        readFileSync(new URL(`../../public/${fontFile(f.family, f)}`, import.meta.url)),
+      ),
+    );
+  }
+});
 
 describe('documentModel', () => {
   it('turns the invoice line items into a table with a bold header', () => {
@@ -84,5 +99,57 @@ describe('documentModel', () => {
     if (image?.kind !== 'image') return;
     expect(new TextDecoder('latin1').decode(image.png.slice(1, 4))).toBe('PNG');
     expect(image.width).toBeCloseTo(612, 0);
+  });
+
+  it('exports the recognised text of an OCR scan instead of the page image', () => {
+    const s = new EngineSession();
+    s.open(fixture('scanned.pdf'));
+    s.setOps([
+      {
+        kind: 'ocr.addLayer',
+        id: 'ocr0',
+        page: 0,
+        words: [
+          { text: 'Scanned', bbox: { x: 72, y: 72, w: 116, h: 28 } },
+          { text: 'invoice', bbox: { x: 196, y: 72, w: 88, h: 28 } },
+        ],
+      },
+    ]);
+    const [page] = documentModel(s.doc);
+    expect(page!.blocks.some((b) => b.kind === 'image')).toBe(false);
+    expect(paragraphs(page!.blocks).map((p) => text(p.runs))).toContain('Scanned invoice');
+  });
+
+  it('keeps two side-by-side lines as paragraphs, not a table', () => {
+    const [page] = documentModel(
+      open(
+        pdf(
+          'BT /F1 11 Tf 72 700 Td (Name:) Tj ET BT /F1 11 Tf 200 700 Td (Ada) Tj ET\nBT /F1 11 Tf 72 686 Td (Role:) Tj ET BT /F1 11 Tf 200 686 Td (Engineer) Tj ET',
+        ),
+      ),
+    );
+    expect(page!.blocks.some((b) => b.kind === 'table')).toBe(false);
+  });
+
+  it('never drops a cell that lines up with an already-filled column', () => {
+    // Row 2 has two cells near column 1: one shares its left edge, one its right edge.
+    const [page] = documentModel(
+      open(
+        pdf(
+          [
+            'BT /F1 11 Tf 72 700 Td (Item) Tj ET BT /F1 11 Tf 300 700 Td (Price) Tj ET',
+            'BT /F1 11 Tf 72 686 Td (A) Tj ET BT /F1 11 Tf 300 686 Td (1) Tj ET',
+            'BT /F1 11 Tf 72 672 Td (B) Tj ET BT /F1 11 Tf 120 672 Td (extra) Tj ET BT /F1 11 Tf 300 672 Td (2) Tj ET',
+            'BT /F1 11 Tf 72 658 Td (C) Tj ET BT /F1 11 Tf 300 658 Td (3) Tj ET',
+          ].join('\n'),
+        ),
+      ),
+    );
+    const all = page!.blocks
+      .flatMap((b) =>
+        b.kind === 'paragraph' ? [text(b.runs)] : b.kind === 'table' ? b.rows.flat().map(text) : [],
+      )
+      .join(' ');
+    expect(all).toContain('extra');
   });
 });
