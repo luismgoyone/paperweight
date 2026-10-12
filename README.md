@@ -5,8 +5,8 @@ A free PDF editor that runs entirely in your browser. **Files never leave your d
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.
 
-> Status: **Phase 1 (Core)** is live at https://pdf-editor-navy.vercel.app. Phase 2 (markup and
-> add text) is in progress (see [Roadmap](#roadmap)).
+> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–2 (viewer, markup, add text) are
+> done; see the [Roadmap](#roadmap).
 
 ## Privacy guarantees
 
@@ -29,7 +29,21 @@ Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' 
 Referrer-Policy: no-referrer
 ```
 
-## Features (Phase 1)
+## Features
+
+### Markup and add text (Phase 2)
+
+- Real PDF annotations: highlight, underline and strikethrough on selected text; pen (ink);
+  rectangle and ellipse; line and arrow; sticky notes. All can be selected, moved, recolored and
+  deleted, and they stay editable in other PDF apps.
+- Add text in a bundled font with size, color, alignment, bold and italic. New text automatically
+  takes the font, size and color of the nearest existing text, so additions to an invoice look
+  like the invoice.
+- Alignment guides snap new and moved objects to the left/right edges and baselines of existing
+  text and other objects (exact to within 0.5 pt; hold Alt to move freely).
+- Download with annotations editable, or **flattened** into the page.
+
+### Viewer (Phase 1)
 
 - Open a PDF with the file picker or by dropping it on the window
 - Password-protected PDFs: password prompt with retry
@@ -45,13 +59,17 @@ Referrer-Policy: no-referrer
 
 ## Keyboard shortcuts
 
-| Action               | Shortcut                     |
-| -------------------- | ---------------------------- |
-| Undo / redo          | ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y)   |
-| Download             | ⌘S                           |
-| Search               | ⌘F, then Enter / Shift+Enter |
-| Zoom in / out        | ⌘= / ⌘-                      |
-| Next / previous page | PageDown / PageUp            |
+| Action                        | Shortcut                     |
+| ----------------------------- | ---------------------------- |
+| Undo / redo                   | ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y)   |
+| Download                      | ⌘S                           |
+| Search                        | ⌘F, then Enter / Shift+Enter |
+| Zoom in / out                 | ⌘= / ⌘-                      |
+| Next / previous page          | PageDown / PageUp            |
+| Select / Add text / Highlight | V / T / H                    |
+| Delete selection              | Delete                       |
+| Nudge selection               | Arrow keys (Shift: 10 pt)    |
+| Finish / cancel text          | ⌘Enter / Esc                 |
 
 ## Architecture
 
@@ -90,7 +108,7 @@ UI mockups made with Google Stitch live in [`docs/design/`](docs/design/).
 ## Roadmap
 
 - [x] **Phase 1: Core**: viewer, search, op log, download, privacy enforcement
-- [ ] Phase 2: Markup and add text (annotations, alignment guides)
+- [x] **Phase 2: Markup and add text**: annotations, add text, alignment guides, flatten
 - [ ] Phase 3: Signatures, forms and images
 - [ ] Phase 4: Page management (reorder, rotate, merge, split)
 - [ ] Phase 5: Edit existing text in the same font
@@ -105,8 +123,13 @@ The full source is linked from the app ("Source code").
 
 ### Third-party licenses
 
-| Component               | License                                                                          |
-| ----------------------- | -------------------------------------------------------------------------------- |
-| MuPDF.js (`mupdf`)      | AGPL-3.0-or-later                                                                |
-| React, Zustand, Comlink | MIT / MIT / Apache-2.0                                                           |
-| Bundled fonts           | None yet. Fonts arrive with Phase 2 and will be listed here with their licenses. |
+| Component                    | License                                                           |
+| ---------------------------- | ----------------------------------------------------------------- |
+| MuPDF.js (`mupdf`)           | AGPL-3.0-or-later                                                 |
+| React, Zustand, Comlink      | MIT / MIT / Apache-2.0                                            |
+| Liberation Sans, Serif, Mono | SIL OFL 1.1 ([license](public/fonts/licenses/Liberation-OFL.txt)) |
+| Inter                        | SIL OFL 1.1 ([license](public/fonts/licenses/Inter-OFL.txt))      |
+| Noto Sans, Noto Serif        | SIL OFL 1.1 ([license](public/fonts/licenses/Noto-OFL.txt))       |
+
+Fonts are self-hosted and loaded once at startup (about 11 MB uncompressed), so the
+"no requests after load" guarantee holds while editing.
