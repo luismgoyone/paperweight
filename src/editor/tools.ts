@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Color, TextSpec, TextStyle } from '../shared/types';
+import type { Color, ImageAsset, Rect, TextSpec, TextStyle } from '../shared/types';
 
 // Interaction state for the editing tools (spec §5). In-progress interactions live here and
 // become ops only on commit (spec §3.3).
@@ -7,6 +7,7 @@ import type { Color, TextSpec, TextStyle } from '../shared/types';
 export type Tool =
   | 'select'
   | 'text'
+  | 'edit'
   | 'highlight'
   | 'underline'
   | 'strikeout'
@@ -15,7 +16,11 @@ export type Tool =
   | 'ellipse'
   | 'line'
   | 'arrow'
-  | 'note';
+  | 'note'
+  | 'sign'
+  | 'image'
+  | 'form'
+  | 'redact';
 
 export type TextDraft = {
   id: string;
@@ -25,6 +30,8 @@ export type TextDraft = {
   isNew: boolean;
   /** For existing text: the committed spec, so cancel and no-op closes change nothing. */
   original: TextSpec | null;
+  /** Set when editing a run of the PDF's own text (commit = text.edit). */
+  edit?: { target: { text: string; bbox: Rect } };
 };
 
 /** Arrow-key nudges accumulate here and become one op when the key is released. */
@@ -63,6 +70,13 @@ type ToolsState = {
   selectedId: string | null;
   draft: TextDraft | null;
   nudge: Nudge | null;
+  /** Signatures made this session (memory only; forgotten with the tab, spec §2). */
+  signatures: ImageAsset[];
+  /** An image or signature waiting to be placed with the next click on a page. */
+  pending: { asset: ImageAsset; kind: 'signature' | 'image' } | null;
+  signatureDialogOpen: boolean;
+  /** Areas marked for redaction, not yet applied (spec §6 Phase 6). */
+  redactMarks: { page: number; rect: Rect }[];
   shape: ShapeStyle;
   ink: ShapeStyle;
   setTool(tool: Tool): void;
@@ -73,6 +87,11 @@ type ToolsState = {
   addNudge(id: string, dx: number, dy: number): void;
   takeNudge(): Nudge | null;
   setShapeStyle(patch: Partial<ShapeStyle>): void;
+  addSignature(asset: ImageAsset): void;
+  setPending(pending: ToolsState['pending']): void;
+  setSignatureDialogOpen(open: boolean): void;
+  addRedactMarks(marks: { page: number; rect: Rect }[]): void;
+  clearRedactMarks(): void;
   setInkStyle(patch: Partial<ShapeStyle>): void;
 };
 
@@ -81,11 +100,34 @@ export const useTools = create<ToolsState>()((set, get) => ({
   selectedId: null,
   draft: null,
   nudge: null,
+  signatures: [],
+  pending: null,
+  signatureDialogOpen: false,
+  redactMarks: [],
   shape: { color: [0.86, 0.15, 0.15], fill: null, width: 2, opacity: 1 },
   ink: { color: [0.15, 0.39, 0.92], fill: null, width: 2, opacity: 1 },
 
   setTool(tool) {
-    set({ tool, selectedId: tool === 'select' ? get().selectedId : null });
+    set({
+      tool,
+      selectedId: tool === 'select' ? get().selectedId : null,
+      pending: tool === 'sign' || tool === 'image' ? get().pending : null,
+    });
+  },
+  addSignature(asset) {
+    set({ signatures: [...get().signatures, asset] });
+  },
+  setPending(pending) {
+    set({ pending });
+  },
+  setSignatureDialogOpen(signatureDialogOpen) {
+    set({ signatureDialogOpen });
+  },
+  addRedactMarks(marks) {
+    set({ redactMarks: [...get().redactMarks, ...marks] });
+  },
+  clearRedactMarks() {
+    set({ redactMarks: [] });
   },
   select(selectedId) {
     set({ selectedId });
@@ -124,5 +166,6 @@ export const useTools = create<ToolsState>()((set, get) => ({
 export const TOOL_SHORTCUTS: Partial<Record<string, Tool>> = {
   v: 'select',
   t: 'text',
+  e: 'edit',
   h: 'highlight',
 };

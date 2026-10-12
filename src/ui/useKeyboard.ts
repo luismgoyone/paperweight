@@ -24,6 +24,8 @@ export function useKeyboard(focusSearch: () => void) {
 
       if (mod && key === 's') {
         e.preventDefault();
+        // Commit whatever is being typed (form fields commit on blur) before saving.
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
         void s.download();
       } else if (mod && key === 'f') {
         e.preventDefault();
@@ -46,7 +48,7 @@ export function useKeyboard(focusSearch: () => void) {
         void s.redo();
       } else if (!mod && !e.altKey && TOOL_SHORTCUTS[key]) {
         const tool = TOOL_SHORTCUTS[key]!;
-        if (tool !== 'text' || s.fontsReady) useTools.getState().setTool(tool);
+        if ((tool !== 'text' && tool !== 'edit') || s.fontsReady) useTools.getState().setTool(tool);
       } else if (e.key === 'Escape') {
         const tools = useTools.getState();
         if (tools.selectedId) tools.select(null);
@@ -57,7 +59,7 @@ export function useKeyboard(focusSearch: () => void) {
         e.preventDefault();
         useTools.getState().select(null);
         void s.updateObject(selected.id, () => null);
-      } else if (NUDGE[e.key]) {
+      } else if (NUDGE[e.key] && !e.altKey) {
         const selected = s.objects.find((o) => o.id === useTools.getState().selectedId);
         if (!selected) return;
         e.preventDefault();

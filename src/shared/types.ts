@@ -9,7 +9,7 @@ export type PageInfo = { index: number; width: number; height: number };
 export type SearchHit = { page: number; rects: Rect[] };
 
 export type OpenResult =
-  | { status: 'ok'; pages: PageInfo[]; repaired: boolean }
+  | { status: 'ok'; pages: PageInfo[]; repaired: boolean; hasForm: boolean }
   | { status: 'needs-password' }
   | { status: 'wrong-password' }
   | { status: 'error'; message: string };
@@ -44,7 +44,13 @@ export type AnnotType = AnnotSpec['type'];
 export type TextAlign = 'left' | 'center' | 'right';
 
 export type TextStyle = {
+  /** Bundled family; for edited text, the fallback when the original font lacks a glyph. */
   family: FontFamily;
+  /**
+   * Edited existing text (spec §4): prefer the run's own font. `fontName` is the PDF's name for
+   * it, shown in the UI. The engine falls back to `family` when that font can't draw a glyph.
+   */
+  original?: { fontName: string };
   size: number;
   color: Color;
   align: TextAlign;
@@ -57,6 +63,12 @@ export type TextStyle = {
  * width, and the first baseline sits at `box.y + ascent`.
  */
 export type TextSpec = { box: Rect; text: string; style: TextStyle };
+
+/**
+ * Images (and signatures) are registered with the engine once under a random key and
+ * referenced from ops by that key, so the op log never carries image bytes.
+ */
+export type ImageAsset = { key: string; bytes: Uint8Array; width: number; height: number };
 
 /** An existing line of text on a page, used for snapping and new-text defaults (spec §4). */
 export type TextRun = {
@@ -81,7 +93,78 @@ export type Op =
   | { kind: 'annot.delete'; id: string; page: number }
   | { kind: 'text.add'; id: string; page: number; spec: TextSpec }
   | { kind: 'text.update'; id: string; page: number; spec: TextSpec }
-  | { kind: 'text.delete'; id: string; page: number };
+  | { kind: 'text.delete'; id: string; page: number }
+  /**
+   * Replaces an existing run of text in place (spec §6 Phase 5). `target` is the run as the
+   * user saw it; `spec` is the replacement (its box keeps the run's baseline and anchored edge).
+   */
+  | {
+      kind: 'text.edit';
+      id: string;
+      page: number;
+      target: { text: string; bbox: Rect };
+      spec: TextSpec;
+    }
+  | { kind: 'image.add'; id: string; page: number; box: Rect; image: string }
+  | { kind: 'image.update'; id: string; page: number; box: Rect; image: string }
+  | { kind: 'image.delete'; id: string; page: number }
+  | { kind: 'form.set'; field: string; value: string | boolean }
+  /** `order` lists the current page indices in their new order (a permutation). */
+  | { kind: 'page.move'; order: number[] }
+  /** Clockwise. */
+  | { kind: 'page.rotate'; pages: number[]; by: 90 | 180 | 270 }
+  | { kind: 'page.delete'; pages: number[] }
+  | { kind: 'page.insertBlank'; at: number; width: number; height: number }
+  /** Pages of a registered document (see EngineApi.registerDocument), inserted before `at`. */
+  | { kind: 'page.insertFrom'; at: number; source: string; pages: number[] }
+  /**
+   * True redaction (spec §6 Phase 6): everything under the rects is removed for good (text,
+   * image pixels, vector graphics, annotations, form-field values, replacement/alt text) and
+   * black boxes drawn. All areas, across pages, are one op (one undo step).
+   */
+  | { kind: 'redact'; areas: { page: number; rects: Rect[] }[] }
+  /**
+   * OCR (spec §6 Phase 7): an invisible text layer over a scanned page so it can be searched
+   * and selected. Each word is fitted to its recognised box.
+   */
+  | { kind: 'ocr.addLayer'; id: string; page: number; words: { text: string; bbox: Rect }[] };
+
+/** What a password-protected PDF allows without the permissions (owner) password. */
+export type Permissions = {
+  print: boolean;
+  copy: boolean;
+  edit: boolean;
+  annotate: boolean;
+  forms: boolean;
+};
+
+export type FieldType = 'text' | 'checkbox' | 'radio' | 'choice' | 'signature' | 'button';
+
+/** One form widget on a page (a field with several widgets appears once per widget). */
+export type FormField = {
+  name: string;
+  type: FieldType;
+  rect: Rect;
+  value: string;
+  readOnly: boolean;
+  multiline: boolean;
+  maxLen: number;
+  /** For checkboxes and radio buttons: the value this widget sets when selected. */
+  onState: string | null;
+  /** Dropdown options: what's shown, and the export value stored in the PDF. */
+  options: { label: string; value: string }[];
+};
 
 /** Ops that get a checkpoint taken before them (redact, page delete; spec §3.3). */
-export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>([]);
+export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>([
+  'page.delete',
+  'redact',
+]);
+
+/** A simplified, structured view of a page for Word export (spec §6 Phase 8). Points. */
+export type DocRun = { text: string; size: number; bold: boolean; italic: boolean; color: Color };
+export type DocBlock =
+  | { kind: 'paragraph'; align: 'left' | 'center' | 'right'; runs: DocRun[]; spaceBefore: number }
+  | { kind: 'image'; png: Uint8Array; width: number; height: number }
+  | { kind: 'table'; rows: DocRun[][][] };
+export type DocPage = { width: number; height: number; blocks: DocBlock[] };

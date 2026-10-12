@@ -49,7 +49,7 @@ const privacyRules = {
 };
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'docs'] },
+  { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'docs', 'public/ocr'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

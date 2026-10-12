@@ -2,6 +2,8 @@ import { useState, type RefObject } from 'react';
 import { useEditor } from '../editor/store';
 import { ZOOM_STEPS, zoomIn, zoomOut } from '../editor/zoom';
 import { SearchBar } from './SearchBar';
+import { CompressDialog } from './dialogs/CompressDialog';
+import { ProtectDialog } from './dialogs/ProtectDialog';
 import {
   ChevronDownIcon,
   DownloadIcon,
@@ -102,7 +104,11 @@ function PageIndicator() {
 function DownloadButton() {
   const download = useEditor((s) => s.download);
   const hasAnnotations = useEditor((s) => s.objects.some((o) => o.kind === 'annot'));
+  const hasForm = useEditor((s) => s.hasForm);
+  const exportWord = useEditor((s) => s.exportWord);
+  const exportingWord = useEditor((s) => s.exportingWord);
   const [open, setOpen] = useState(false);
+  const [dialog, setDialog] = useState<'compress' | 'protect' | null>(null);
 
   return (
     <div
@@ -159,8 +165,70 @@ function DownloadButton() {
               Annotations become part of the page
             </span>
           </button>
+          {hasForm && (
+            <button
+              role="menuitem"
+              type="button"
+              className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
+              onClick={() => {
+                setOpen(false);
+                void download({ flattenForms: true });
+              }}
+            >
+              Download with form flattened
+              <span className="block text-xs text-slate-500">
+                Filled fields can no longer be edited
+              </span>
+            </button>
+          )}
+          <button
+            role="menuitem"
+            type="button"
+            disabled={exportingWord}
+            className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100 disabled:opacity-50"
+            onClick={() => {
+              setOpen(false);
+              void exportWord();
+            }}
+          >
+            {exportingWord ? 'Creating Word file…' : 'Export to Word (.docx)'}
+            <span className="block text-xs text-slate-500">
+              Best effort: text, images and simple tables; layout may differ
+            </span>
+          </button>
+          <div className="my-1 border-t border-slate-200" />
+          <button
+            role="menuitem"
+            type="button"
+            className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
+            onClick={() => {
+              setOpen(false);
+              setDialog('compress');
+            }}
+          >
+            Compress…
+            <span className="block text-xs text-slate-500">
+              Smaller file, before and after sizes
+            </span>
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
+            onClick={() => {
+              setOpen(false);
+              setDialog('protect');
+            }}
+          >
+            Password…
+            <span className="block text-xs text-slate-500">
+              Protect, restrict, or remove a password
+            </span>
+          </button>
         </div>
       )}
+      {dialog === 'compress' && <CompressDialog onClose={() => setDialog(null)} />}
+      {dialog === 'protect' && <ProtectDialog onClose={() => setDialog(null)} />}
     </div>
   );
 }

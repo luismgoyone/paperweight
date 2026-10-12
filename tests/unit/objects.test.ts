@@ -35,6 +35,21 @@ describe('foldObjects', () => {
   });
 });
 
+describe('edited text', () => {
+  it('becomes a text object that later edits update', () => {
+    const objects = foldObjects([
+      {
+        kind: 'text.edit',
+        id: 'e',
+        page: 0,
+        target: { text: '$26', bbox: { x: 0, y: 0, w: 10, h: 10 } },
+        spec: text,
+      },
+    ]);
+    expect(objects.get('e')).toEqual({ id: 'e', page: 0, kind: 'text', spec: text });
+  });
+});
+
 describe('objectBounds', () => {
   it('pads strokes by half their width', () => {
     expect(objectBounds({ id: 'a', page: 0, kind: 'annot', annot: rect(10, 10) })).toEqual({
@@ -153,5 +168,87 @@ describe('translate', () => {
     expect(i.kind === 'annot' && i.annot.type === 'ink' && i.annot.paths).toEqual([
       [{ x: 1, y: 1 }],
     ]);
+  });
+});
+
+describe('image objects', () => {
+  const ops: Op[] = [
+    { kind: 'image.add', id: 'img', page: 0, box: { x: 10, y: 20, w: 100, h: 50 }, image: 'k' },
+    { kind: 'image.update', id: 'img', page: 0, box: { x: 30, y: 20, w: 100, h: 50 }, image: 'k' },
+  ];
+  it('folds, bounds and translates images', () => {
+    const img = foldObjects(ops).get('img')!;
+    expect(img.kind).toBe('image');
+    expect(objectBounds(img)).toEqual({ x: 30, y: 20, w: 100, h: 50 });
+    const moved = translate(img, 5, 5);
+    expect(objectBounds(moved)).toEqual({ x: 35, y: 25, w: 100, h: 50 });
+  });
+  it('is removed by image.delete', () => {
+    expect(foldObjects([...ops, { kind: 'image.delete', id: 'img', page: 0 }]).size).toBe(0);
+  });
+});
+
+describe('page ops in the object model', () => {
+  const note = (id: string, page: number): Op => ({
+    kind: 'annot.add',
+    id,
+    page,
+    annot: { type: 'note', at: { x: 1, y: 1 }, text: '', color: RED },
+  });
+  const pages = (ops: Op[]) =>
+    Object.fromEntries([...foldObjects(ops)].map(([id, o]) => [id, o.page]));
+
+  it('follows pages when they are reordered', () => {
+    expect(pages([note('a', 0), note('b', 2), { kind: 'page.move', order: [2, 0, 1] }])).toEqual({
+      a: 1,
+      b: 0,
+    });
+  });
+  it('drops objects on deleted pages and shifts the rest', () => {
+    expect(
+      pages([note('a', 0), note('b', 1), note('c', 2), { kind: 'page.delete', pages: [1] }]),
+    ).toEqual({ a: 0, c: 1 });
+  });
+  it('shifts objects after inserted pages', () => {
+    expect(
+      pages([
+        note('a', 0),
+        note('b', 1),
+        { kind: 'page.insertBlank', at: 1, width: 100, height: 100 },
+        { kind: 'page.insertFrom', at: 0, source: 'x', pages: [0, 1] },
+      ]),
+    ).toEqual({ a: 2, b: 4 });
+  });
+  it('takes objects on rotated pages out of the editable list', () => {
+    expect(
+      pages([note('a', 0), note('b', 1), { kind: 'page.rotate', pages: [0], by: 90 }]),
+    ).toEqual({ b: 1 });
+  });
+  it('maps a later edit to the moved page', () => {
+    const ops: Op[] = [note('a', 0), { kind: 'page.move', order: [1, 0] }];
+    const moved = foldObjects(ops).get('a')!;
+    expect(moved.page).toBe(1);
+  });
+});
+
+describe('redaction in the object model', () => {
+  it('drops objects under a redacted area so they can never be redrawn', () => {
+    const objects = foldObjects([
+      {
+        kind: 'text.add',
+        id: 'secret',
+        page: 0,
+        spec: { ...text, box: { x: 100, y: 100, w: 80, h: 12 } },
+      },
+      {
+        kind: 'text.add',
+        id: 'other-page',
+        page: 1,
+        spec: { ...text, box: { x: 100, y: 100, w: 80, h: 12 } },
+      },
+      { kind: 'annot.add', id: 'far', page: 0, annot: rect(400, 400) },
+      { kind: 'redact', areas: [{ page: 0, rects: [{ x: 90, y: 95, w: 50, h: 20 }] }] },
+    ]);
+    expect([...objects.keys()]).toEqual(['other-page', 'far']);
   });
 });

@@ -12,6 +12,7 @@ describe('EngineSession.open', () => {
     expect(r).toEqual({
       status: 'ok',
       repaired: false,
+      hasForm: false,
       pages: [0, 1, 2].map((index) => ({ index, width: 612, height: 792 })),
     });
   });

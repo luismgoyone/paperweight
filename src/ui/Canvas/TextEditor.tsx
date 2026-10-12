@@ -105,7 +105,8 @@ export function TextEditor({ draft, zoom, measure, onCommit }: Props) {
         if (e.key === 'Escape') {
           e.preventDefault();
           finish(true);
-        } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || draft.edit)) {
+          // Edits of existing text are single-line (spec §4: no reflow), so Enter commits.
           e.preventDefault();
           finish();
         }
@@ -120,8 +121,8 @@ export function TextEditor({ draft, zoom, measure, onCommit }: Props) {
         lineHeight: LINE_HEIGHT,
         color: cssColor(style.color),
         textAlign: style.align,
-        // Editing existing text: hide the committed copy rendered underneath.
-        background: draft.isNew ? 'transparent' : 'white',
+        // Editing existing text: hide the copy rendered underneath while typing.
+        background: draft.isNew && !draft.edit ? 'transparent' : 'white',
         whiteSpace: 'pre',
       }}
     />

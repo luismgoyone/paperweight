@@ -4,9 +4,42 @@ import type { AnnotSpec, Op, Point, Rect, TextSpec } from '../shared/types';
 
 export type EditorObject =
   | { id: string; page: number; kind: 'annot'; annot: AnnotSpec }
-  | { id: string; page: number; kind: 'text'; spec: TextSpec };
+  | { id: string; page: number; kind: 'text'; spec: TextSpec }
+  | { id: string; page: number; kind: 'image'; box: Rect; image: string };
 
 export const NOTE_SIZE = 20;
+
+type PageOp = Extract<Op, { kind: `page.${string}` }>;
+
+/** Keeps objects on the right pages through page changes (spec §6 Phase 4). */
+function remapPages(objects: Map<string, EditorObject>, op: PageOp): void {
+  for (const [id, o] of objects) {
+    let page: number | null = o.page;
+    switch (op.kind) {
+      case 'page.move':
+        page = op.order.indexOf(o.page);
+        break;
+      case 'page.delete':
+        page = op.pages.includes(o.page)
+          ? null
+          : o.page - op.pages.filter((p) => p < o.page).length;
+        break;
+      case 'page.insertBlank':
+        if (o.page >= op.at) page = o.page + 1;
+        break;
+      case 'page.insertFrom':
+        if (o.page >= op.at) page = o.page + op.pages.length;
+        break;
+      case 'page.rotate':
+        // Objects rotate with their page in the PDF, but the model has no rotated text boxes;
+        // they stay in the document and are no longer editable here.
+        if (op.pages.includes(o.page)) page = null;
+        break;
+    }
+    if (page === null || page < 0) objects.delete(id);
+    else if (page !== o.page) objects.set(id, { ...o, page });
+  }
+}
 
 export function foldObjects(ops: readonly Op[]): Map<string, EditorObject> {
   const objects = new Map<string, EditorObject>();
@@ -18,11 +51,48 @@ export function foldObjects(ops: readonly Op[]): Map<string, EditorObject> {
         break;
       case 'text.add':
       case 'text.update':
-        objects.set(op.id, { id: op.id, page: op.page, kind: 'text', spec: op.spec });
+      case 'text.edit': // edited existing text becomes an editable text object
+        // Emptied text draws nothing; it isn't an object the user can select.
+        if (op.spec.text.trim())
+          objects.set(op.id, { id: op.id, page: op.page, kind: 'text', spec: op.spec });
+        else objects.delete(op.id);
+        break;
+      case 'image.add':
+      case 'image.update':
+        objects.set(op.id, {
+          id: op.id,
+          page: op.page,
+          kind: 'image',
+          box: op.box,
+          image: op.image,
+        });
         break;
       case 'annot.delete':
       case 'text.delete':
+      case 'image.delete':
         objects.delete(op.id);
+        break;
+      case 'redact':
+        // Whatever a redaction touched is gone for good: it must never be redrawn from the
+        // model (moving a redacted text would otherwise bring its words back).
+        for (const [id, o] of objects) {
+          const b = objectBounds(o);
+          const hit = op.areas.some(
+            (a) =>
+              a.page === o.page &&
+              a.rects.some(
+                (r) => b.x < r.x + r.w && b.x + b.w > r.x && b.y < r.y + r.h && b.y + b.h > r.y,
+              ),
+          );
+          if (hit) objects.delete(id);
+        }
+        break;
+      case 'page.move':
+      case 'page.delete':
+      case 'page.insertBlank':
+      case 'page.insertFrom':
+      case 'page.rotate':
+        remapPages(objects, op);
         break;
     }
   }
@@ -39,6 +109,7 @@ function boundsOf(points: Point[], pad = 0): Rect {
 
 export function objectBounds(o: EditorObject): Rect {
   if (o.kind === 'text') return o.spec.box;
+  if (o.kind === 'image') return o.box;
   const a = o.annot;
   switch (a.type) {
     case 'highlight':
@@ -86,6 +157,7 @@ export function hitTest(
 const move = (p: Point, dx: number, dy: number): Point => ({ x: p.x + dx, y: p.y + dy });
 
 export function translate(o: EditorObject, dx: number, dy: number): EditorObject {
+  if (o.kind === 'image') return { ...o, box: { ...o.box, x: o.box.x + dx, y: o.box.y + dy } };
   if (o.kind === 'text') {
     return {
       ...o,
