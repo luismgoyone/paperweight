@@ -5,9 +5,9 @@ A free PDF editor that runs entirely in your browser. **Files never leave your d
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.
 
-> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–6 (viewer, markup, add text,
+> Live at **https://pdf-editor-navy.vercel.app**. Phases 1–7 (viewer, markup, add text,
 > signatures, forms, images, page management, editing existing text, redaction, compression,
-> passwords) are built; see the [Roadmap](#roadmap).
+> passwords, OCR) are built; see the [Roadmap](#roadmap).
 
 ## Privacy guarantees
 
@@ -31,6 +31,16 @@ Referrer-Policy: no-referrer
 ```
 
 ## Features
+
+### OCR (Phase 7)
+
+- Scanned pages (no text layer) get a **Recognize text (OCR)** button. Tesseract runs in this
+  tab and adds an invisible text layer, so the scan can be searched and selected and looks
+  exactly the same. English is included.
+- The OCR engine and language data (~8 MB) are served from this site and downloaded only the
+  first time you use OCR. This is the one exception to "no requests after the page loads":
+  those requests are plain downloads of the app's own files and never carry your document.
+  Tesseract's defaults (a CDN, and caching data in IndexedDB) are switched off.
 
 ### Redact, compress, passwords (Phase 6)
 
@@ -156,7 +166,7 @@ UI mockups made with Google Stitch live in [`docs/design/`](docs/design/).
 - [x] **Phase 4: Page management**: reorder, rotate, delete, insert, merge, extract, split
 - [x] **Phase 5: Edit existing text in the same font**
 - [x] **Phase 6: Redact, compress, passwords**
-- [ ] Phase 7: OCR (Tesseract.js, self-hosted)
+- [x] **Phase 7: OCR** (Tesseract.js, self-hosted)
 - [ ] Phase 8: PDF → Word
 
 ## License
@@ -170,6 +180,8 @@ The full source is linked from the app ("Source code").
 | ---------------------------------------- | ----------------------------------------------------------------- |
 | MuPDF.js (`mupdf`)                       | AGPL-3.0-or-later                                                 |
 | React, Zustand, Comlink                  | MIT / MIT / Apache-2.0                                            |
+| Tesseract.js, tesseract.js-core          | Apache-2.0                                                        |
+| English OCR model (tessdata_fast)        | Apache-2.0 ([license](public/tessdata/LICENSE-tessdata_fast.txt)) |
 | Liberation Sans, Serif, Mono             | SIL OFL 1.1 ([license](public/fonts/licenses/Liberation-OFL.txt)) |
 | Inter                                    | SIL OFL 1.1 ([license](public/fonts/licenses/Inter-OFL.txt))      |
 | Noto Sans, Noto Serif                    | SIL OFL 1.1 ([license](public/fonts/licenses/Noto-OFL.txt))       |
