@@ -81,9 +81,10 @@ describe('fill specs', () => {
   });
 
   it('finds the X already in a checkbox', () => {
-    const x = added('x1', 'X', { x: 72, y: 151, w: 7, h: 11 });
+    const box = { x: 72, y: 151, w: 7, h: 11 };
+    const x = added('x1', 'X', box);
     expect(checkMarkIn(yes, [x], 0)?.id).toBe('x1');
     expect(checkMarkIn(yes, [x], 1)).toBeNull();
-    expect(checkMarkIn(yes, [added('t', 'JUAN', x.spec.box)], 0)).toBeNull();
+    expect(checkMarkIn(yes, [added('t', 'JUAN', box)], 0)).toBeNull();
   });
 });
