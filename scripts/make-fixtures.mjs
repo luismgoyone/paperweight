@@ -286,10 +286,15 @@ write('invoice-31.pdf', makeInvoice('$31'));
 // in a character the subset lacks must fall back to a bundled font and say so.
 {
   const doc = new mupdf.PDFDocument();
-  const bytes = readFileSync(new URL('../public/fonts/LiberationSans-Regular.ttf', import.meta.url));
+  const bytes = readFileSync(
+    new URL('../public/fonts/LiberationSans-Regular.ttf', import.meta.url),
+  );
   const font = new mupdf.Font('LiberationSans', bytes);
   const F1 = doc.addFont(font);
-  const hex = (s) => [...s].map((c) => font.encodeCharacter(c.codePointAt(0)).toString(16).padStart(4, '0')).join('');
+  const hex = (s) =>
+    [...s]
+      .map((c) => font.encodeCharacter(c.codePointAt(0)).toString(16).padStart(4, '0'))
+      .join('');
   const content = `BT /F1 12 Tf 72 700 Td <${hex('Total $26')}> Tj ET\n`;
   const resources = doc.addObject({ Font: { F1 } });
   doc.insertPage(-1, doc.addPage([0, 0, 612, 792], 0, resources, content));

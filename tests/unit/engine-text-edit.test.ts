@@ -13,7 +13,12 @@ import { fixture } from './helpers';
 
 beforeAll(() => {
   for (const f of ALL_FONTS) {
-    registerFont(fontId(f.family, f), new Uint8Array(readFileSync(new URL(`../../public/${fontFile(f.family, f)}`, import.meta.url))));
+    registerFont(
+      fontId(f.family, f),
+      new Uint8Array(
+        readFileSync(new URL(`../../public/${fontFile(f.family, f)}`, import.meta.url)),
+      ),
+    );
   }
 });
 
@@ -37,7 +42,15 @@ function editOp(id: string, run: TextRun, text: string, anchor: 'left' | 'right'
       w: 40,
       h: run.size * 1.2,
     },
-    style: { family, size: run.size, color: run.color, align: anchor, bold: false, italic: false, original: { fontName: run.font } },
+    style: {
+      family,
+      size: run.size,
+      color: run.color,
+      align: anchor,
+      bold: false,
+      italic: false,
+      original: { fontName: run.font },
+    },
   };
   return { kind: 'text.edit', id, page: 0, target: { text: run.text, bbox: run.bbox }, spec };
 }
@@ -64,11 +77,22 @@ describe('text.edit (success criterion 1)', () => {
   it('looks like an invoice that always said $31 (golden render)', () => {
     const s = session('invoice.pdf');
     s.setOps([editOp('e1', amountRun(textRuns(s.doc, 0), '$26')!, '$31')]);
-    const edited = renderPageRGBA(mupdf.Document.openDocument(s.save(), 'application/pdf'), 0, 2).pixels;
-    const reference = renderPageRGBA(mupdf.Document.openDocument(fixture('invoice-31.pdf'), 'application/pdf'), 0, 2).pixels;
+    const edited = renderPageRGBA(
+      mupdf.Document.openDocument(s.save(), 'application/pdf'),
+      0,
+      2,
+    ).pixels;
+    const reference = renderPageRGBA(
+      mupdf.Document.openDocument(fixture('invoice-31.pdf'), 'application/pdf'),
+      0,
+      2,
+    ).pixels;
     let different = 0;
     for (let i = 0; i < edited.length; i += 4) {
-      const d = Math.abs(edited[i]! - reference[i]!) + Math.abs(edited[i + 1]! - reference[i + 1]!) + Math.abs(edited[i + 2]! - reference[i + 2]!);
+      const d =
+        Math.abs(edited[i]! - reference[i]!) +
+        Math.abs(edited[i + 1]! - reference[i + 1]!) +
+        Math.abs(edited[i + 2]! - reference[i + 2]!);
       if (d > 60) different++;
     }
     // No white box, no ghost of the old glyphs, nothing shifted.
@@ -79,7 +103,10 @@ describe('text.edit (success criterion 1)', () => {
     const s = session('invoice.pdf');
     const run = amountRun(textRuns(s.doc, 0), '$26')!;
     const edit = editOp('e1', run, '$31') as Extract<Op, { kind: 'text.edit' }>;
-    s.setOps([edit, { kind: 'text.update', id: 'e1', page: 0, spec: { ...edit.spec, text: '$35' } }]);
+    s.setOps([
+      edit,
+      { kind: 'text.update', id: 'e1', page: 0, spec: { ...edit.spec, text: '$35' } },
+    ]);
     expect(textRuns(s.doc, 0).map((r) => r.text)).toContain('$35');
     s.setOps([]);
     expect(textRuns(s.doc, 0).filter((r) => r.text === '$26')).toHaveLength(2);
@@ -115,7 +142,11 @@ describe('text.edit with a subset font (spec §4 cases 1 and 2)', () => {
     expect(after.text).toBe('Total $31');
     expect(Math.abs(after.x0 - r.x0)).toBeLessThan(0.5);
     expect(Math.abs(after.baseline - r.baseline)).toBeLessThan(0.1);
-    expect(textEditInfo('e1')).toEqual({ fontName: r.font, usedOriginal: false, substitute: 'Liberation Sans' });
+    expect(textEditInfo('e1')).toEqual({
+      fontName: r.font,
+      usedOriginal: false,
+      substitute: 'Liberation Sans',
+    });
   });
 });
 

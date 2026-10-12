@@ -10,14 +10,26 @@ import { fixture } from './helpers';
 
 beforeAll(() => {
   for (const f of ALL_FONTS) {
-    registerFont(fontId(f.family, f), new Uint8Array(readFileSync(new URL(`../../public/${fontFile(f.family, f)}`, import.meta.url))));
+    registerFont(
+      fontId(f.family, f),
+      new Uint8Array(
+        readFileSync(new URL(`../../public/${fontFile(f.family, f)}`, import.meta.url)),
+      ),
+    );
   }
 });
 
 const spec = (text: string, y: number): TextSpec => ({
   box: { x: 100, y, w: 200, h: 14 },
   text,
-  style: { family: 'Liberation Sans', size: 10, color: [0, 0, 0], align: 'left', bold: false, italic: false },
+  style: {
+    family: 'Liberation Sans',
+    size: 10,
+    color: [0, 0, 0],
+    align: 'left',
+    bold: false,
+    italic: false,
+  },
 });
 
 /** Applies a text-only redaction on page 0 over a rect, like Phase 5 edits do. */
