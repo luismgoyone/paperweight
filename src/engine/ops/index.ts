@@ -4,6 +4,7 @@ import { applyAnnotOp } from './annotations';
 import { applyFormSet } from '../forms';
 import { applyImageOp } from './images';
 import { applySetTitle } from './meta';
+import { applyPageOp } from './pages';
 import { applyTextOp } from './text-add';
 
 /** An op could not be applied; the document stays at its prior state (spec §7). */
@@ -36,6 +37,12 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
         return applyImageOp(doc, op);
       case 'form.set':
         return applyFormSet(doc, op);
+      case 'page.move':
+      case 'page.rotate':
+      case 'page.delete':
+      case 'page.insertBlank':
+      case 'page.insertFrom':
+        return applyPageOp(doc, op);
       default:
         throw new Error(`Unknown operation "${(op as { kind: string }).kind}"`);
     }
@@ -49,5 +56,5 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
 /** Pages whose rendering an op changes, or 'all' when the op isn't tied to one page. */
 export function pagesTouched(op: Op): number[] | 'all' {
   if ('page' in op) return [op.page];
-  return op.kind === 'form.set' ? 'all' : [];
+  return op.kind === 'form.set' || op.kind.startsWith('page.') ? 'all' : [];
 }

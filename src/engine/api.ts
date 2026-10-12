@@ -9,6 +9,7 @@ import type {
   TextRun,
 } from '../shared/types';
 import type { ChangedPages, SaveOptions } from './document';
+import type { RegisterResult } from './documents';
 
 /** The engine's Comlink surface (spec §3.2). Implemented in worker.ts. */
 export interface EngineApi {
@@ -23,6 +24,10 @@ export interface EngineApi {
   close(): Promise<void>;
   /** Makes an image available to image ops under `key`; returns its pixel size. Idempotent. */
   registerImage(key: string, bytes: Uint8Array): Promise<{ width: number; height: number }>;
+  /** Makes another PDF available to `page.insertFrom` under `key`. */
+  registerDocument(key: string, bytes: Uint8Array, password?: string): Promise<RegisterResult>;
+  /** A new PDF of these pages of the current document (extract / split). */
+  extract(pages: number[]): Promise<Uint8Array>;
   /** Forgets registered images except these keys. */
   retainImages(keys: string[]): Promise<void>;
   /** Makes a bundled font available to text ops. Idempotent. */

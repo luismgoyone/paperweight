@@ -1,5 +1,6 @@
 import * as Comlink from 'comlink';
 import { E2E_CRASH, ENGINE_READY, isCrashError, type EngineApi } from '../engine/api';
+import type { RegisterResult } from '../engine/documents';
 import type { OpenResult } from '../shared/types';
 
 export type Enqueue = <T>(task: () => Promise<T>) => Promise<T>;
@@ -89,6 +90,9 @@ export function createEngineClient(): EngineClient {
     registerFont: (id, bytes) => call(() => remote.registerFont(id, bytes)),
     registerImage: (key, bytes) => call(() => remote.registerImage(key, bytes)),
     retainImages: (keys) => call(() => remote.retainImages(keys)),
+    registerDocument: (key, bytes, password) =>
+      call(() => remote.registerDocument(key, bytes, password) as Promise<RegisterResult>),
+    extract: (pages) => call(() => remote.extract(pages)),
     terminate: () => {
       crashed = true;
       remote[Comlink.releaseProxy]();

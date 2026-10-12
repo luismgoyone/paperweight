@@ -91,7 +91,15 @@ export type Op =
   | { kind: 'image.add'; id: string; page: number; box: Rect; image: string }
   | { kind: 'image.update'; id: string; page: number; box: Rect; image: string }
   | { kind: 'image.delete'; id: string; page: number }
-  | { kind: 'form.set'; field: string; value: string | boolean };
+  | { kind: 'form.set'; field: string; value: string | boolean }
+  /** `order` lists the current page indices in their new order (a permutation). */
+  | { kind: 'page.move'; order: number[] }
+  /** Clockwise. */
+  | { kind: 'page.rotate'; pages: number[]; by: 90 | 180 | 270 }
+  | { kind: 'page.delete'; pages: number[] }
+  | { kind: 'page.insertBlank'; at: number; width: number; height: number }
+  /** Pages of a registered document (see EngineApi.registerDocument), inserted before `at`. */
+  | { kind: 'page.insertFrom'; at: number; source: string; pages: number[] };
 
 export type FieldType = 'text' | 'checkbox' | 'radio' | 'choice' | 'signature' | 'button';
 
@@ -111,4 +119,4 @@ export type FormField = {
 };
 
 /** Ops that get a checkpoint taken before them (redact, page delete; spec §3.3). */
-export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>([]);
+export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>(['page.delete']);

@@ -172,3 +172,46 @@ describe('image objects', () => {
     expect(foldObjects([...ops, { kind: 'image.delete', id: 'img', page: 0 }]).size).toBe(0);
   });
 });
+
+describe('page ops in the object model', () => {
+  const note = (id: string, page: number): Op => ({
+    kind: 'annot.add',
+    id,
+    page,
+    annot: { type: 'note', at: { x: 1, y: 1 }, text: '', color: RED },
+  });
+  const pages = (ops: Op[]) =>
+    Object.fromEntries([...foldObjects(ops)].map(([id, o]) => [id, o.page]));
+
+  it('follows pages when they are reordered', () => {
+    expect(pages([note('a', 0), note('b', 2), { kind: 'page.move', order: [2, 0, 1] }])).toEqual({
+      a: 1,
+      b: 0,
+    });
+  });
+  it('drops objects on deleted pages and shifts the rest', () => {
+    expect(
+      pages([note('a', 0), note('b', 1), note('c', 2), { kind: 'page.delete', pages: [1] }]),
+    ).toEqual({ a: 0, c: 1 });
+  });
+  it('shifts objects after inserted pages', () => {
+    expect(
+      pages([
+        note('a', 0),
+        note('b', 1),
+        { kind: 'page.insertBlank', at: 1, width: 100, height: 100 },
+        { kind: 'page.insertFrom', at: 0, source: 'x', pages: [0, 1] },
+      ]),
+    ).toEqual({ a: 2, b: 4 });
+  });
+  it('takes objects on rotated pages out of the editable list', () => {
+    expect(
+      pages([note('a', 0), note('b', 1), { kind: 'page.rotate', pages: [0], by: 90 }]),
+    ).toEqual({ b: 1 });
+  });
+  it('maps a later edit to the moved page', () => {
+    const ops: Op[] = [note('a', 0), { kind: 'page.move', order: [1, 0] }];
+    const moved = foldObjects(ops).get('a')!;
+    expect(moved.page).toBe(1);
+  });
+});

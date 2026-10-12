@@ -2,6 +2,8 @@
 import * as Comlink from 'comlink';
 import { E2E_CRASH, ENGINE_READY, type EngineApi } from './api';
 import { EngineSession } from './document';
+import { registerDocument } from './documents';
+import { extractPages } from './export';
 import { registerFont } from './fonts';
 import { listFields } from './forms';
 import { imageSize, registerImage, retainImages } from './images';
@@ -47,6 +49,13 @@ const api: EngineApi = {
   async registerImage(key, bytes) {
     registerImage(key, bytes);
     return imageSize(bytes);
+  },
+  async registerDocument(key, bytes, password) {
+    return registerDocument(key, bytes, password);
+  },
+  async extract(pages) {
+    const bytes = extractPages(session.doc, pages);
+    return Comlink.transfer(bytes, [bytes.buffer]);
   },
   async retainImages(keys) {
     retainImages(keys);

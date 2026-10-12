@@ -9,6 +9,38 @@ export type EditorObject =
 
 export const NOTE_SIZE = 20;
 
+type PageOp = Extract<Op, { kind: `page.${string}` }>;
+
+/** Keeps objects on the right pages through page changes (spec §6 Phase 4). */
+function remapPages(objects: Map<string, EditorObject>, op: PageOp): void {
+  for (const [id, o] of objects) {
+    let page: number | null = o.page;
+    switch (op.kind) {
+      case 'page.move':
+        page = op.order.indexOf(o.page);
+        break;
+      case 'page.delete':
+        page = op.pages.includes(o.page)
+          ? null
+          : o.page - op.pages.filter((p) => p < o.page).length;
+        break;
+      case 'page.insertBlank':
+        if (o.page >= op.at) page = o.page + 1;
+        break;
+      case 'page.insertFrom':
+        if (o.page >= op.at) page = o.page + op.pages.length;
+        break;
+      case 'page.rotate':
+        // Objects rotate with their page in the PDF, but the model has no rotated text boxes;
+        // they stay in the document and are no longer editable here.
+        if (op.pages.includes(o.page)) page = null;
+        break;
+    }
+    if (page === null || page < 0) objects.delete(id);
+    else if (page !== o.page) objects.set(id, { ...o, page });
+  }
+}
+
 export function foldObjects(ops: readonly Op[]): Map<string, EditorObject> {
   const objects = new Map<string, EditorObject>();
   for (const op of ops) {
@@ -35,6 +67,13 @@ export function foldObjects(ops: readonly Op[]): Map<string, EditorObject> {
       case 'text.delete':
       case 'image.delete':
         objects.delete(op.id);
+        break;
+      case 'page.move':
+      case 'page.delete':
+      case 'page.insertBlank':
+      case 'page.insertFrom':
+      case 'page.rotate':
+        remapPages(objects, op);
         break;
     }
   }
