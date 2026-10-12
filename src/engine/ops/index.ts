@@ -1,6 +1,7 @@
 import type * as mupdf from 'mupdf';
 import type { Op } from '../../shared/types';
 import { applyAnnotOp } from './annotations';
+import { applyImageOp } from './images';
 import { applySetTitle } from './meta';
 import { applyTextOp } from './text-add';
 
@@ -28,6 +29,10 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
       case 'text.update':
       case 'text.delete':
         return applyTextOp(doc, op);
+      case 'image.add':
+      case 'image.update':
+      case 'image.delete':
+        return applyImageOp(doc, op);
       default:
         throw new Error(`Unknown operation "${(op as { kind: string }).kind}"`);
     }

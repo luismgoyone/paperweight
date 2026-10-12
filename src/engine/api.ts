@@ -11,6 +11,8 @@ export interface EngineApi {
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
   save(options?: SaveOptions): Promise<Uint8Array>;
   close(): Promise<void>;
+  /** Makes an image available to image ops under `key`; returns its pixel size. Idempotent. */
+  registerImage(key: string, bytes: Uint8Array): Promise<{ width: number; height: number }>;
   /** Makes a bundled font available to text ops. Idempotent. */
   registerFont(id: string, bytes: Uint8Array): Promise<void>;
 }

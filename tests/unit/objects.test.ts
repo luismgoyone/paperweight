@@ -155,3 +155,20 @@ describe('translate', () => {
     ]);
   });
 });
+
+describe('image objects', () => {
+  const ops: Op[] = [
+    { kind: 'image.add', id: 'img', page: 0, box: { x: 10, y: 20, w: 100, h: 50 }, image: 'k' },
+    { kind: 'image.update', id: 'img', page: 0, box: { x: 30, y: 20, w: 100, h: 50 }, image: 'k' },
+  ];
+  it('folds, bounds and translates images', () => {
+    const img = foldObjects(ops).get('img')!;
+    expect(img.kind).toBe('image');
+    expect(objectBounds(img)).toEqual({ x: 30, y: 20, w: 100, h: 50 });
+    const moved = translate(img, 5, 5);
+    expect(objectBounds(moved)).toEqual({ x: 35, y: 25, w: 100, h: 50 });
+  });
+  it('is removed by image.delete', () => {
+    expect(foldObjects([...ops, { kind: 'image.delete', id: 'img', page: 0 }]).size).toBe(0);
+  });
+});

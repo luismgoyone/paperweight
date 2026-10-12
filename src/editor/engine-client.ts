@@ -86,6 +86,7 @@ export function createEngineClient(): EngineClient {
     save: (options) => call(() => remote.save(options)),
     close: () => call(() => remote.close()),
     registerFont: (id, bytes) => call(() => remote.registerFont(id, bytes)),
+    registerImage: (key, bytes) => call(() => remote.registerImage(key, bytes)),
     terminate: () => {
       crashed = true;
       remote[Comlink.releaseProxy]();

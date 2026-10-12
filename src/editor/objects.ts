@@ -4,7 +4,8 @@ import type { AnnotSpec, Op, Point, Rect, TextSpec } from '../shared/types';
 
 export type EditorObject =
   | { id: string; page: number; kind: 'annot'; annot: AnnotSpec }
-  | { id: string; page: number; kind: 'text'; spec: TextSpec };
+  | { id: string; page: number; kind: 'text'; spec: TextSpec }
+  | { id: string; page: number; kind: 'image'; box: Rect; image: string };
 
 export const NOTE_SIZE = 20;
 
@@ -20,8 +21,19 @@ export function foldObjects(ops: readonly Op[]): Map<string, EditorObject> {
       case 'text.update':
         objects.set(op.id, { id: op.id, page: op.page, kind: 'text', spec: op.spec });
         break;
+      case 'image.add':
+      case 'image.update':
+        objects.set(op.id, {
+          id: op.id,
+          page: op.page,
+          kind: 'image',
+          box: op.box,
+          image: op.image,
+        });
+        break;
       case 'annot.delete':
       case 'text.delete':
+      case 'image.delete':
         objects.delete(op.id);
         break;
     }
@@ -39,6 +51,7 @@ function boundsOf(points: Point[], pad = 0): Rect {
 
 export function objectBounds(o: EditorObject): Rect {
   if (o.kind === 'text') return o.spec.box;
+  if (o.kind === 'image') return o.box;
   const a = o.annot;
   switch (a.type) {
     case 'highlight':
@@ -86,6 +99,7 @@ export function hitTest(
 const move = (p: Point, dx: number, dy: number): Point => ({ x: p.x + dx, y: p.y + dy });
 
 export function translate(o: EditorObject, dx: number, dy: number): EditorObject {
+  if (o.kind === 'image') return { ...o, box: { ...o.box, x: o.box.x + dx, y: o.box.y + dy } };
   if (o.kind === 'text') {
     return {
       ...o,

@@ -3,6 +3,7 @@ import * as Comlink from 'comlink';
 import { E2E_CRASH, ENGINE_READY, type EngineApi } from './api';
 import { EngineSession } from './document';
 import { registerFont } from './fonts';
+import { imageSize, registerImage } from './images';
 import { renderPageRGBA, searchDocument } from './render';
 import { selectText, textRuns } from './text';
 
@@ -38,6 +39,10 @@ const api: EngineApi = {
   },
   async close() {
     session.close();
+  },
+  async registerImage(key, bytes) {
+    registerImage(key, bytes);
+    return imageSize(bytes);
   },
   async registerFont(id, bytes) {
     registerFont(id, bytes);

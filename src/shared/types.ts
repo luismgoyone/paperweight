@@ -58,6 +58,12 @@ export type TextStyle = {
  */
 export type TextSpec = { box: Rect; text: string; style: TextStyle };
 
+/**
+ * Images (and signatures) are registered with the engine once under a content key and
+ * referenced from ops by that key, so the op log never carries image bytes.
+ */
+export type ImageAsset = { key: string; bytes: Uint8Array; width: number; height: number };
+
 /** An existing line of text on a page, used for snapping and new-text defaults (spec §4). */
 export type TextRun = {
   text: string;
@@ -81,7 +87,10 @@ export type Op =
   | { kind: 'annot.delete'; id: string; page: number }
   | { kind: 'text.add'; id: string; page: number; spec: TextSpec }
   | { kind: 'text.update'; id: string; page: number; spec: TextSpec }
-  | { kind: 'text.delete'; id: string; page: number };
+  | { kind: 'text.delete'; id: string; page: number }
+  | { kind: 'image.add'; id: string; page: number; box: Rect; image: string }
+  | { kind: 'image.update'; id: string; page: number; box: Rect; image: string }
+  | { kind: 'image.delete'; id: string; page: number };
 
 /** Ops that get a checkpoint taken before them (redact, page delete; spec §3.3). */
 export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>([]);

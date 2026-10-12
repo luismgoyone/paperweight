@@ -339,6 +339,7 @@ function NoteText({ id, initial }: { id: string; initial: string }) {
 
 const TITLES: Record<string, string> = {
   text: 'Text',
+  image: 'Image',
   highlight: 'Highlight',
   underline: 'Underline',
   strikeout: 'Strikethrough',
@@ -369,6 +370,12 @@ function SelectionControls({ object }: { object: EditorObject }) {
           )
         }
       />
+    );
+  } else if (object.kind === 'image') {
+    body = (
+      <p className="text-sm text-slate-600">
+        Drag to move. Drag a corner to resize; it keeps its proportions.
+      </p>
     );
   } else {
     const a = object.annot;
@@ -415,7 +422,7 @@ function SelectionControls({ object }: { object: EditorObject }) {
   }
 
   return (
-    <Section title={TITLES[object.kind === 'text' ? 'text' : object.annot.type]!}>
+    <Section title={TITLES[object.kind === 'annot' ? object.annot.type : object.kind]!}>
       {body}
       <button
         type="button"

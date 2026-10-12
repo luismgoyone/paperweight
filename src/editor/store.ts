@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { editedFileName } from '../shared/filename';
-import type { Op, PageInfo, Point, Quad, SearchHit, TextRun } from '../shared/types';
+import type { ImageAsset, Op, PageInfo, Point, Quad, SearchHit, TextRun } from '../shared/types';
+import { newId } from './ids';
 import { createEngineClient, createSerialQueue, type EngineClient } from './engine-client';
 import { loadFonts } from './fonts';
 import { History } from './history';
@@ -64,6 +65,8 @@ export type EditorState = {
   /** Existing text on a page (cached per page version). */
   getTextRuns(page: number): Promise<TextRun[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
+  /** Registers PNG/JPEG bytes for image ops (kept in memory for this tab only). */
+  addImage(bytes: Uint8Array): Promise<ImageAsset>;
   setZoom(zoom: number): void;
   setZoomMode(mode: ZoomMode): void;
   applyFit(viewportW: number, viewportH: number): void;
@@ -92,6 +95,8 @@ let source: Source | null = null;
 /** A file being opened (e.g. waiting for its password); replaces `source` only once it opens. */
 let pending: Source | null = null;
 let restarts = 0;
+// Images placed this session, by key, so a restarted engine can be given them again.
+const images = new Map<string, Uint8Array>();
 /** Resolves when the current engine has every bundled font (text ops need them). */
 let fontsRegistered: Promise<void> = Promise.resolve();
 // History changes and the engine sync that follows them run one at a time, so a failed op
@@ -178,6 +183,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     }
     if (!source) return;
     try {
+      await Promise.all([...images].map(([key, bytes]) => client.registerImage(key, bytes)));
       const result = await client.open(source.bytes, source.password);
       if (result.status !== 'ok') throw new Error('Could not reopen the document');
       await exclusive(sync);
@@ -456,6 +462,13 @@ export const useEditor = create<EditorState>()((set, get) => {
         textRunCache.set(key, runs);
       }
       return runs;
+    },
+
+    async addImage(bytes) {
+      const key = newId();
+      const { width, height } = await engineOrThrow().registerImage(key, bytes);
+      images.set(key, bytes);
+      return { key, bytes, width, height };
     },
 
     selectText(page, a, b) {
