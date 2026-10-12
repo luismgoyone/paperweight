@@ -131,7 +131,7 @@ export async function buildDocx(pages: DocPage[]): Promise<Blob> {
   };
 
   const document = new Document({
-    creator: 'PDF Editor',
+    creator: 'Paperweight',
     sections: pages.map((p) => {
       const page = layout(p);
       const twips = (pt: number) => Math.round(pt * TWIPS_PER_POINT);

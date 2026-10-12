@@ -13,6 +13,12 @@ test('shows the empty state with privacy messaging', async ({ page }) => {
   await expect(page.getByRole('banner').getByRole('link', { name: /source/i })).toHaveCount(0);
 });
 
+test('is branded Paperweight in the tab and the top bar', async ({ page }) => {
+  await expect(page).toHaveTitle('Paperweight · Private PDF editor');
+  await expect(page.getByRole('banner')).toContainText('Paperweight');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon.svg');
+});
+
 test('offers the source code from the download menu once a file is open', async ({ page }) => {
   await openFixture(page, 'simple.pdf');
   await expect(page.getByRole('banner').getByRole('link', { name: /source/i })).toHaveCount(0);
