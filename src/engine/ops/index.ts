@@ -4,6 +4,7 @@ import { applyAnnotOp } from './annotations';
 import { applyFormSet } from '../forms';
 import { applyImageOp } from './images';
 import { applySetTitle } from './meta';
+import { applyOcrOp } from './ocr';
 import { applyPageOp } from './pages';
 import { applyRedactOp } from './redact';
 import { applyTextOp } from './text-add';
@@ -49,6 +50,8 @@ export function applyOp(doc: mupdf.PDFDocument, op: Op): void {
         return applyPageOp(doc, op);
       case 'redact':
         return applyRedactOp(doc, op);
+      case 'ocr.addLayer':
+        return applyOcrOp(doc, op);
       default:
         throw new Error(`Unknown operation "${(op as { kind: string }).kind}"`);
     }

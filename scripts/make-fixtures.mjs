@@ -301,3 +301,30 @@ write('invoice-31.pdf', makeInvoice('$31'));
   doc.subsetFonts();
   write('subset-font.pdf', doc.saveToBuffer('garbage,compress').asUint8Array());
 }
+
+// A scanned page (spec §9): an image of text with no text layer, for OCR.
+{
+  const src = new mupdf.PDFDocument();
+  const font = src.addSimpleFont(new mupdf.Font('Helvetica'));
+  const lines = ['Scanned invoice', 'Hosting total 26 dollars', 'Thank you'];
+  const content = lines.map((l, i) => `BT /F1 28 Tf 72 ${700 - i * 48} Td (${l}) Tj ET`).join('\n');
+  src.insertPage(
+    -1,
+    src.addPage([0, 0, 612, 792], 0, src.addObject({ Font: { F1: font } }), content),
+  );
+  const pix = src
+    .loadPage(0)
+    .toPixmap(mupdf.Matrix.scale(200 / 72, 200 / 72), mupdf.ColorSpace.DeviceGray, false);
+  const doc = new mupdf.PDFDocument();
+  const img = doc.addImage(new mupdf.Image(pix));
+  doc.insertPage(
+    -1,
+    doc.addPage(
+      [0, 0, 612, 792],
+      0,
+      doc.addObject({ XObject: { Scan: img } }),
+      'q 612 0 0 792 0 0 cm /Scan Do Q',
+    ),
+  );
+  write('scanned.pdf', doc.saveToBuffer('garbage,compress').asUint8Array());
+}

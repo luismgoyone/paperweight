@@ -4,11 +4,12 @@ import { E2E_CRASH, ENGINE_READY, type EngineApi } from './api';
 import { EngineSession } from './document';
 import { registerDocument, retainDocuments } from './documents';
 import { textEditInfo } from './ops/text-add';
+import { documentModel } from './docmodel';
 import { registerFont } from './fonts';
 import { listFields } from './forms';
 import { imageSize, registerImage, retainImages } from './images';
 import { renderPageRGBA, searchDocument } from './render';
-import { selectText, textRuns } from './text';
+import { hasImages, selectText, textRuns } from './text';
 
 const session = new EngineSession();
 
@@ -32,6 +33,16 @@ const api: EngineApi = {
   },
   async fields(page) {
     return listFields(session.doc, page);
+  },
+  async documentModel() {
+    const model = documentModel(session.doc);
+    const images = model.flatMap((p) =>
+      p.blocks.flatMap((b) => (b.kind === 'image' ? [b.png.buffer as ArrayBuffer] : [])),
+    );
+    return Comlink.transfer(model, images);
+  },
+  async hasImages(page) {
+    return hasImages(session.doc, page);
   },
   async textRuns(page) {
     return textRuns(session.doc, page);

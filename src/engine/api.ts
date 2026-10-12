@@ -1,4 +1,5 @@
 import type {
+  DocPage,
   FormField,
   Op,
   OpenResult,
@@ -19,6 +20,9 @@ export interface EngineApi {
   render(page: number, scale: number): Promise<ImageBitmap>;
   search(needle: string): Promise<SearchHit[]>;
   textRuns(page: number): Promise<TextRun[]>;
+  hasImages(page: number): Promise<boolean>;
+  /** A structured, best-effort reading of the pages for Word export (spec §6 Phase 8). */
+  documentModel(): Promise<DocPage[]>;
   fields(page: number): Promise<FormField[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
   save(options?: SaveOptions): Promise<Uint8Array>;

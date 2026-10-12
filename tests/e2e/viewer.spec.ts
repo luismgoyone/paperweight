@@ -67,7 +67,10 @@ test('navigates with thumbnails and the page box', async ({ page }) => {
   await expect(page.locator('[data-page="57"] canvas[data-rendered]')).toBeAttached();
 });
 
-test('scrolls 100 pages without long frames (smoke check)', async ({ page }) => {
+test('scrolls 100 pages without long frames (smoke check)', async ({ page, browserName }) => {
+  // A frame-timing smoke check: only meaningful on one engine without other tests competing
+  // for the CPU; CI runs it on Chromium.
+  test.skip(browserName !== 'chromium', 'frame timing is engine- and load-dependent');
   const worst = await page.getByTestId('viewer').evaluate(async (el) => {
     const frame = () => new Promise<number>((r) => requestAnimationFrame(r));
     let worst = 0;

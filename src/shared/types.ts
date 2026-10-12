@@ -122,7 +122,12 @@ export type Op =
    * image pixels, vector graphics, annotations, form-field values, replacement/alt text) and
    * black boxes drawn. All areas, across pages, are one op (one undo step).
    */
-  | { kind: 'redact'; areas: { page: number; rects: Rect[] }[] };
+  | { kind: 'redact'; areas: { page: number; rects: Rect[] }[] }
+  /**
+   * OCR (spec §6 Phase 7): an invisible text layer over a scanned page so it can be searched
+   * and selected. Each word is fitted to its recognised box.
+   */
+  | { kind: 'ocr.addLayer'; id: string; page: number; words: { text: string; bbox: Rect }[] };
 
 /** What a password-protected PDF allows without the permissions (owner) password. */
 export type Permissions = {
@@ -155,3 +160,11 @@ export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>([
   'page.delete',
   'redact',
 ]);
+
+/** A simplified, structured view of a page for Word export (spec §6 Phase 8). Points. */
+export type DocRun = { text: string; size: number; bold: boolean; italic: boolean; color: Color };
+export type DocBlock =
+  | { kind: 'paragraph'; align: 'left' | 'center' | 'right'; runs: DocRun[]; spaceBefore: number }
+  | { kind: 'image'; png: Uint8Array; width: number; height: number }
+  | { kind: 'table'; rows: DocRun[][][] };
+export type DocPage = { width: number; height: number; blocks: DocBlock[] };

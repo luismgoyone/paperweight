@@ -591,6 +591,90 @@ function RedactionSection() {
   );
 }
 
+/**
+ * Scanned pages (no text layer) can be made searchable with OCR (spec §6 Phase 7). Recognition
+ * runs in this tab; its engine and language data load from this site when first used.
+ */
+function OcrPrompt() {
+  const currentPage = useEditor((s) => s.currentPage);
+  const pageCount = useEditor((s) => s.pages.length);
+  const version = useEditor((s) => s.pageVersions[s.currentPage] ?? 0);
+  const getTextRuns = useEditor((s) => s.getTextRuns);
+  const recognizePages = useEditor((s) => s.recognizePages);
+  const ocr = useEditor((s) => s.ocr);
+  const cancelOcr = useEditor((s) => s.cancelOcr);
+  const pageHasImages = useEditor((s) => s.pageHasImages);
+  const [scanned, setScanned] = useState<{ page: number; version: number; noText: boolean } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let live = true;
+    // A scan is a page with an image and no text (blank pages don't need OCR).
+    Promise.all([getTextRuns(currentPage), pageHasImages(currentPage)]).then(
+      ([runs, images]) =>
+        live && setScanned({ page: currentPage, version, noText: runs.length === 0 && images }),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [getTextRuns, pageHasImages, currentPage, version]);
+
+  if (ocr) {
+    return (
+      <section className="border-t border-slate-200 p-4 text-sm" aria-live="polite">
+        <p className="text-slate-700">
+          {ocr.page < 0
+            ? 'Looking for scanned pages…'
+            : `Recognising text on page ${ocr.page + 1}… ${Math.round(ocr.progress * 100)}%`}
+        </p>
+        <div className="mt-2 h-1.5 rounded bg-slate-200">
+          <div
+            className="h-1.5 rounded bg-blue-600"
+            style={{ width: `${Math.round(ocr.progress * 100)}%` }}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={cancelOcr}
+          className="mt-2 text-xs font-medium text-slate-600 hover:text-slate-900"
+        >
+          Cancel
+        </button>
+      </section>
+    );
+  }
+  if (!scanned || scanned.page !== currentPage || !scanned.noText) return null;
+  return (
+    <section className="border-t border-slate-200 p-4 text-sm">
+      <p className="font-medium text-slate-900">This page has no text</p>
+      <p className="mt-1 text-xs text-slate-500">
+        If it&apos;s a scan, recognise its text so you can search and select it. It runs in this
+        tab; nothing is uploaded.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void recognizePages([currentPage])}
+          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Recognize text (OCR)
+        </button>
+        {pageCount > 1 && (
+          <button
+            type="button"
+            onClick={() => void recognizePages('scanned')}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            All scanned pages
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** Right panel (spec §5): properties for the current selection, or the active tool's defaults. */
 export function PropertiesPanel() {
   const pages = useEditor((s) => s.pages);
@@ -677,6 +761,7 @@ export function PropertiesPanel() {
       </div>
     );
   }
+  const ocrPrompt = <OcrPrompt />;
 
   return (
     <aside
@@ -685,6 +770,7 @@ export function PropertiesPanel() {
       className="hidden w-72 shrink-0 flex-col overflow-y-auto border-l border-slate-200 bg-white lg:flex"
     >
       {content}
+      {ocrPrompt}
       {page && (
         <dl className="mt-auto border-t border-slate-200 p-4 text-xs">
           <dt className="mb-2 font-semibold tracking-wide text-slate-500 uppercase">Document</dt>
