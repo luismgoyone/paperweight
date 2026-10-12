@@ -1,5 +1,6 @@
 import * as Comlink from 'comlink';
 import { E2E_CRASH, ENGINE_READY, isCrashError, type EngineApi } from '../engine/api';
+import type { RegisterResult } from '../engine/documents';
 import type { OpenResult } from '../shared/types';
 
 export type Enqueue = <T>(task: () => Promise<T>) => Promise<T>;
@@ -82,6 +83,8 @@ export function createEngineClient(): EngineClient {
       ),
     search: (needle) => call(() => remote.search(needle)),
     textRuns: (page) => call(() => remote.textRuns(page)),
+    hasImages: (page) => call(() => remote.hasImages(page)),
+    documentModel: () => call(() => remote.documentModel()),
     fields: (page) => call(() => remote.fields(page)),
     selectText: (page, a, b) => call(() => remote.selectText(page, a, b)),
     save: (options) => call(() => remote.save(options)),
@@ -89,6 +92,12 @@ export function createEngineClient(): EngineClient {
     registerFont: (id, bytes) => call(() => remote.registerFont(id, bytes)),
     registerImage: (key, bytes) => call(() => remote.registerImage(key, bytes)),
     retainImages: (keys) => call(() => remote.retainImages(keys)),
+    registerDocument: (key, bytes, password) =>
+      call(() => remote.registerDocument(key, bytes, password) as Promise<RegisterResult>),
+    extract: (pages) => call(() => remote.extract(pages)),
+    retainDocuments: (keys) => call(() => remote.retainDocuments(keys)),
+    textEditInfo: (id) => call(() => remote.textEditInfo(id)),
+    compress: (options) => call(() => remote.compress(options)),
     terminate: () => {
       crashed = true;
       remote[Comlink.releaseProxy]();

@@ -7,3 +7,5 @@ LICENSE
 playwright-report
 test-results
 public/fonts
+public/ocr
+public/tessdata

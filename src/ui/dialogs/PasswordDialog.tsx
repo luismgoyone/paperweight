@@ -2,11 +2,55 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useEditor } from '../../editor/store';
 import { LockIcon } from '../icons';
 
+type PromptProps = {
+  message: string;
+  passwordError: boolean;
+  loading: boolean;
+  submitPassword: (password: string) => void;
+  cancelPassword: () => void;
+};
+
+/** Opening the document the user picked. */
 export function PasswordDialog() {
   const passwordError = useEditor((s) => s.passwordError);
   const loading = useEditor((s) => s.status === 'loading');
   const submitPassword = useEditor((s) => s.submitPassword);
   const cancelPassword = useEditor((s) => s.cancelPassword);
+  return (
+    <PasswordPrompt
+      message="This PDF is protected. Enter its password to open it."
+      passwordError={passwordError}
+      loading={loading}
+      submitPassword={(p) => void submitPassword(p)}
+      cancelPassword={cancelPassword}
+    />
+  );
+}
+
+/** Inserting pages from another, password-protected PDF. */
+export function InsertPasswordDialog() {
+  const prompt = useEditor((s) => s.insertPassword);
+  const submit = useEditor((s) => s.submitInsertPassword);
+  const cancel = useEditor((s) => s.cancelInsertPassword);
+  if (!prompt) return null;
+  return (
+    <PasswordPrompt
+      message={`"${prompt.fileName}" is protected. Enter its password to insert its pages.`}
+      passwordError={prompt.wrong}
+      loading={false}
+      submitPassword={submit}
+      cancelPassword={cancel}
+    />
+  );
+}
+
+function PasswordPrompt({
+  message,
+  passwordError,
+  loading,
+  submitPassword,
+  cancelPassword,
+}: PromptProps) {
   const [password, setPassword] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const titleId = useId();
@@ -19,7 +63,7 @@ export function PasswordDialog() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    void submitPassword(password);
+    submitPassword(password);
   };
 
   return (
@@ -38,9 +82,7 @@ export function PasswordDialog() {
             Password required
           </h2>
         </div>
-        <p className="mt-2 text-sm text-neutral-600">
-          This PDF is protected. Enter its password to open it.
-        </p>
+        <p className="mt-2 text-sm text-neutral-600">{message}</p>
         <label htmlFor={inputId} className="mt-4 block text-sm font-medium text-neutral-700">
           Password
         </label>

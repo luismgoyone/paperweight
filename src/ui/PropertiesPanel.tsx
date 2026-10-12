@@ -5,6 +5,7 @@ import { PALETTE, useTools, type ShapeStyle } from '../editor/tools';
 import { FONT_FAMILIES, LINE_HEIGHT, type FontFamily } from '../shared/fonts';
 import type { AnnotSpec, Color, TextAlign, TextSpec, TextStyle } from '../shared/types';
 import { colorToHex, cssColor, hexToColor, sameColor } from './colors';
+import { RedactConfirm } from './dialogs/RedactConfirm';
 import { measureTextWidth } from './measure';
 
 // Edits to a selected object go through `updateObject`, which applies the change to the
@@ -159,6 +160,8 @@ function SizeField({ value, onCommit }: { value: number; onCommit: (v: number) =
   );
 }
 
+const ORIGINAL_FONT = '__original__';
+
 function TextControls({
   style,
   onChange,
@@ -174,9 +177,18 @@ function TextControls({
         <select
           aria-label="Font"
           className={`${input} w-40`}
-          value={style.family}
-          onChange={(e) => onChange({ family: e.target.value as FontFamily })}
+          value={style.original ? ORIGINAL_FONT : style.family}
+          onChange={(e) => {
+            if (e.target.value === ORIGINAL_FONT) return;
+            // Picking a bundled family replaces the document's own font (spec §4 case 3).
+            onChange({ family: e.target.value as FontFamily, original: undefined });
+          }}
         >
+          {style.original && (
+            <option value={ORIGINAL_FONT}>
+              {style.original.fontName.replace(/^[A-Z]{6}\+/, '')} (from PDF)
+            </option>
+          )}
           {FONT_FAMILIES.map((f) => (
             <option key={f}>{f}</option>
           ))}
@@ -337,6 +349,46 @@ function NoteText({ id, initial }: { id: string; initial: string }) {
   );
 }
 
+/**
+ * Spec §4: font substitution is never silent. Edited text says which font it's drawn in.
+ */
+function FontNotice({ id }: { id: string }) {
+  const getTextEditInfo = useEditor((s) => s.getTextEditInfo);
+  const revision = useEditor((s) => s.revision);
+  const [info, setInfo] = useState<Awaited<ReturnType<typeof getTextEditInfo>>>(null);
+  useEffect(() => {
+    let live = true;
+    getTextEditInfo(id).then(
+      (i) => live && setInfo(i),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [getTextEditInfo, id, revision]);
+  if (!info) return null;
+  const name = info.fontName.replace(/^[A-Z]{6}\+/, '');
+  return info.usedOriginal ? (
+    <p
+      data-testid="font-notice"
+      className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+    >
+      Same font as the document: {name}
+    </p>
+  ) : (
+    <p
+      data-testid="font-notice"
+      role="status"
+      className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900"
+    >
+      Substituted: {name} → {info.substitute}
+      <span className="block text-amber-800/80">
+        The original font in this PDF doesn't include every character you typed.
+      </span>
+    </p>
+  );
+}
+
 const TITLES: Record<string, string> = {
   text: 'Text',
   image: 'Image',
@@ -362,14 +414,19 @@ function SelectionControls({ object }: { object: EditorObject }) {
   let body: ReactNode;
   if (object.kind === 'text') {
     body = (
-      <TextControls
-        style={object.spec.style}
-        onChange={(patch) =>
-          void updateObject(object.id, (o) =>
-            o.kind === 'text' ? { ...o, spec: restyle(o.spec, { ...o.spec.style, ...patch }) } : o,
-          )
-        }
-      />
+      <>
+        {object.spec.style.original && <FontNotice id={object.id} />}
+        <TextControls
+          style={object.spec.style}
+          onChange={(patch) =>
+            void updateObject(object.id, (o) =>
+              o.kind === 'text'
+                ? { ...o, spec: restyle(o.spec, { ...o.spec.style, ...patch }) }
+                : o,
+            )
+          }
+        />
+      </>
     );
   } else if (object.kind === 'image') {
     body = (
@@ -485,6 +542,139 @@ function SignaturePicker() {
   );
 }
 
+function RedactionSection() {
+  const marks = useTools((s) => s.redactMarks);
+  const clear = useTools((s) => s.clearRedactMarks);
+  const applyRedactions = useEditor((s) => s.applyRedactions);
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <Section title="Redaction">
+      <p className="text-sm text-slate-700" data-testid="redact-count">
+        {marks.length === 0
+          ? 'Drag over anything you want removed.'
+          : `${marks.length} area${marks.length === 1 ? '' : 's'} marked`}
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={!marks.length}
+          onClick={clear}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          Clear marks
+        </button>
+        <button
+          type="button"
+          disabled={!marks.length}
+          onClick={() => setConfirming(true)}
+          className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          Apply redactions
+        </button>
+      </div>
+      <p className="text-xs text-slate-500">
+        Marked content is permanently removed: text, images and drawings under each area. Black
+        boxes replace it.
+      </p>
+      {confirming && (
+        <RedactConfirm
+          count={marks.length}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => {
+            setConfirming(false);
+            // Marks are cleared once the redaction has been applied.
+            void applyRedactions([...marks]);
+          }}
+        />
+      )}
+    </Section>
+  );
+}
+
+/**
+ * Scanned pages (no text layer) can be made searchable with OCR (spec §6 Phase 7). Recognition
+ * runs in this tab; its engine and language data load from this site when first used.
+ */
+function OcrPrompt() {
+  const currentPage = useEditor((s) => s.currentPage);
+  const pageCount = useEditor((s) => s.pages.length);
+  const version = useEditor((s) => s.pageVersions[s.currentPage] ?? 0);
+  const getTextRuns = useEditor((s) => s.getTextRuns);
+  const recognizePages = useEditor((s) => s.recognizePages);
+  const ocr = useEditor((s) => s.ocr);
+  const cancelOcr = useEditor((s) => s.cancelOcr);
+  const pageHasImages = useEditor((s) => s.pageHasImages);
+  const [scanned, setScanned] = useState<{ page: number; version: number; noText: boolean } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let live = true;
+    // A scan is a page with an image and no text (blank pages don't need OCR).
+    Promise.all([getTextRuns(currentPage), pageHasImages(currentPage)]).then(
+      ([runs, images]) =>
+        live && setScanned({ page: currentPage, version, noText: runs.length === 0 && images }),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [getTextRuns, pageHasImages, currentPage, version]);
+
+  if (ocr) {
+    return (
+      <section className="border-t border-slate-200 p-4 text-sm" aria-live="polite">
+        <p className="text-slate-700">
+          {ocr.page < 0
+            ? 'Looking for scanned pages…'
+            : `Recognising text on page ${ocr.page + 1}… ${Math.round(ocr.progress * 100)}%`}
+        </p>
+        <div className="mt-2 h-1.5 rounded bg-slate-200">
+          <div
+            className="h-1.5 rounded bg-blue-600"
+            style={{ width: `${Math.round(ocr.progress * 100)}%` }}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={cancelOcr}
+          className="mt-2 text-xs font-medium text-slate-600 hover:text-slate-900"
+        >
+          Cancel
+        </button>
+      </section>
+    );
+  }
+  if (!scanned || scanned.page !== currentPage || !scanned.noText) return null;
+  return (
+    <section className="border-t border-slate-200 p-4 text-sm">
+      <p className="font-medium text-slate-900">This page has no text</p>
+      <p className="mt-1 text-xs text-slate-500">
+        If it&apos;s a scan, recognise its text so you can search and select it. It runs in this
+        tab; nothing is uploaded.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void recognizePages([currentPage])}
+          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Recognize text (OCR)
+        </button>
+        {pageCount > 1 && (
+          <button
+            type="button"
+            onClick={() => void recognizePages('scanned')}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            All scanned pages
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** Right panel (spec §5): properties for the current selection, or the active tool's defaults. */
 export function PropertiesPanel() {
   const pages = useEditor((s) => s.pages);
@@ -500,6 +690,7 @@ export function PropertiesPanel() {
   const setInkStyle = useTools((s) => s.setInkStyle);
   const selected = objects.find((o) => o.id === selectedId);
   const page = pages[currentPage];
+  const redactCount = useTools((s) => s.redactMarks.length);
 
   let content: ReactNode;
   if (draft) {
@@ -520,6 +711,8 @@ export function PropertiesPanel() {
         />
       </Section>
     );
+  } else if (tool === 'redact' || redactCount > 0) {
+    content = <RedactionSection />;
   } else if (tool === 'sign') {
     content = <SignaturePicker />;
   } else if (tool === 'form') {
@@ -568,6 +761,7 @@ export function PropertiesPanel() {
       </div>
     );
   }
+  const ocrPrompt = <OcrPrompt />;
 
   return (
     <aside
@@ -576,6 +770,7 @@ export function PropertiesPanel() {
       className="hidden w-72 shrink-0 flex-col overflow-y-auto border-l border-slate-200 bg-white lg:flex"
     >
       {content}
+      {ocrPrompt}
       {page && (
         <dl className="mt-auto border-t border-slate-200 p-4 text-xs">
           <dt className="mb-2 font-semibold tracking-wide text-slate-500 uppercase">Document</dt>

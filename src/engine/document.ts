@@ -1,6 +1,14 @@
 import * as mupdf from 'mupdf';
-import { DESTRUCTIVE_KINDS, type Op, type OpenResult, type PageInfo } from '../shared/types';
+import {
+  DESTRUCTIVE_KINDS,
+  type Op,
+  type OpenResult,
+  type PageInfo,
+  type Permissions,
+} from '../shared/types';
 import { ENGINE_BROKEN } from './api';
+import { downsampleImages } from './compress';
+import { graftPages } from './graft';
 import { applyOp, pagesTouched } from './ops';
 
 const PDF_MIME = 'application/pdf';
@@ -8,12 +16,35 @@ const CHECKPOINT_EVERY = 20;
 
 export type ChangedPages = number[] | 'all';
 
+/** Password protection on export (spec §6 Phase 6). */
+export type Security =
+  | { kind: 'remove' }
+  | { kind: 'set'; userPassword: string; ownerPassword: string; permissions: Permissions };
+
 export type SaveOptions = {
   /** Bake annotations into the page content. */
   flatten?: boolean;
   /** Bake form fields into the page content. */
   flattenForms?: boolean;
+  /** Change protection; by default a protected file stays protected the same way. */
+  security?: Security;
 };
+
+/** PDF permission bits (ISO 32000 table 22). Accessibility extraction is always allowed. */
+function permissionBits(p: Permissions): number {
+  let bits = 512; // extract for accessibility
+  if (p.print) bits |= 4 | 2048; // print, high quality
+  if (p.edit) bits |= 8 | 1024; // modify, assemble
+  if (p.copy) bits |= 16;
+  if (p.annotate) bits |= 32;
+  if (p.forms || p.annotate) bits |= 256;
+  return bits;
+}
+
+function checkOptionValue(value: string, what: string): string {
+  if (/[,=]/.test(value)) throw new Error(`The ${what} can't contain a comma or "=".`);
+  return value;
+}
 
 function toBytes(buffer: mupdf.Buffer): Uint8Array {
   const bytes = buffer.asUint8Array().slice();
@@ -76,12 +107,11 @@ export class EngineSession {
     this.current = doc;
     this.password = password;
     this.checkpoints.set(0, bytes);
-    const fields = doc.getTrailer().get('Root', 'AcroForm', 'Fields');
     return {
       status: 'ok',
       pages: this.pageInfo(),
       repaired: doc.wasRepaired(),
-      hasForm: fields.isArray() && fields.length > 0,
+      hasForm: this.hasForm(),
     };
   }
 
@@ -163,6 +193,36 @@ export class EngineSession {
     this.current = doc;
   }
 
+  /** Whether the document has fillable form fields (pages may bring some in). */
+  hasForm(): boolean {
+    const fields = this.doc.getTrailer().get('Root', 'AcroForm', 'Fields');
+    return fields.isArray() && fields.length > 0;
+  }
+
+  /**
+   * A new PDF of `pages` (extract / split). A password-protected document's extracts are
+   * protected with the same password (AES-256), so extracting doesn't silently drop it.
+   */
+  extract(pages: number[]): Uint8Array {
+    const out = new mupdf.PDFDocument();
+    try {
+      graftPages(out, 0, this.doc, pages);
+      const pw = this.password;
+      if (pw !== undefined && /[,=]/.test(pw)) {
+        throw new Error(
+          "This file's password contains a comma or '=', so extracted pages can't keep it.",
+        );
+      }
+      const options =
+        pw === undefined
+          ? 'garbage,compress'
+          : `garbage,compress,encrypt=aes-256,user-password=${pw},owner-password=${pw}`;
+      return toBytes(out.saveToBuffer(options));
+    } finally {
+      out.destroy();
+    }
+  }
+
   pageInfo(): PageInfo[] {
     const doc = this.doc;
     const pages: PageInfo[] = [];
@@ -179,18 +239,50 @@ export class EngineSession {
    * The final PDF bytes. `flatten` bakes annotations into the page content (spec §6 Phase 2);
    * it works on a copy, so the live document keeps its editable annotations.
    */
-  save(options: SaveOptions = {}): Uint8Array {
-    const write =
-      this.password === undefined ? 'garbage,compress' : 'garbage,compress,encrypt=keep';
-    const bytes = toBytes(this.doc.saveToBuffer(write));
-    if (!options.flatten && !options.flattenForms) return bytes;
+  /** MuPDF writer options for the final file. */
+  private writeOptions(security?: Security, base = 'garbage,compress'): string {
+    if (!security) return this.password === undefined ? base : `${base},encrypt=keep`;
+    if (security.kind === 'remove') return `${base},decrypt`;
+    const user = checkOptionValue(security.userPassword, 'password');
+    const owner = checkOptionValue(security.ownerPassword || security.userPassword, 'password');
+    if (!user && !owner) throw new Error('Enter a password');
+    return `${base},encrypt=aes-256,user-password=${user},owner-password=${owner},permissions=${permissionBits(security.permissions)}`;
+  }
 
-    const copy = new mupdf.PDFDocument(bytes);
+  save(options: SaveOptions = {}): Uint8Array {
+    const write = this.writeOptions(options.security);
+    if (!options.flatten && !options.flattenForms) return toBytes(this.doc.saveToBuffer(write));
+
+    const copy = new mupdf.PDFDocument(toBytes(this.doc.saveToBuffer(this.writeOptions())));
     try {
       if (copy.needsPassword() && this.password !== undefined)
         copy.authenticatePassword(this.password);
       copy.bake(Boolean(options.flatten), Boolean(options.flattenForms));
       return toBytes(copy.saveToBuffer(write));
+    } finally {
+      copy.destroy();
+    }
+  }
+
+  /**
+   * A smaller copy of the current document (spec §6 Phase 6): images shown at more than `dpi`
+   * are resampled to it and re-encoded as JPEG when that's smaller, fonts are subset and
+   * duplicate objects merged. Never larger than the current file; the open document is unchanged.
+   */
+  compress(options: { dpi: number }): { bytes: Uint8Array; before: number; after: number } {
+    const original = this.save();
+    const copy = new mupdf.PDFDocument(original);
+    try {
+      if (copy.needsPassword() && this.password !== undefined)
+        copy.authenticatePassword(this.password);
+      downsampleImages(copy, options.dpi);
+      copy.subsetFonts();
+      const bytes = toBytes(
+        copy.saveToBuffer(this.writeOptions(undefined, 'garbage=deduplicate,compress')),
+      );
+      return bytes.length < original.length
+        ? { bytes, before: original.length, after: bytes.length }
+        : { bytes: original, before: original.length, after: original.length };
     } finally {
       copy.destroy();
     }
