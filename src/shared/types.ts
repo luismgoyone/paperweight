@@ -160,3 +160,11 @@ export const DESTRUCTIVE_KINDS: ReadonlySet<Op['kind']> = new Set<Op['kind']>([
   'page.delete',
   'redact',
 ]);
+
+/** A simplified, structured view of a page for Word export (spec §6 Phase 8). Points. */
+export type DocRun = { text: string; size: number; bold: boolean; italic: boolean; color: Color };
+export type DocBlock =
+  | { kind: 'paragraph'; align: 'left' | 'center' | 'right'; runs: DocRun[]; spaceBefore: number }
+  | { kind: 'image'; png: Uint8Array; width: number; height: number }
+  | { kind: 'table'; rows: DocRun[][][] };
+export type DocPage = { width: number; height: number; blocks: DocBlock[] };
