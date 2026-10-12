@@ -19,6 +19,7 @@ export interface EngineApi {
   render(page: number, scale: number): Promise<ImageBitmap>;
   search(needle: string): Promise<SearchHit[]>;
   textRuns(page: number): Promise<TextRun[]>;
+  hasImages(page: number): Promise<boolean>;
   fields(page: number): Promise<FormField[]>;
   selectText(page: number, a: Point, b: Point): Promise<Quad[]>;
   save(options?: SaveOptions): Promise<Uint8Array>;

@@ -8,7 +8,7 @@ import { registerFont } from './fonts';
 import { listFields } from './forms';
 import { imageSize, registerImage, retainImages } from './images';
 import { renderPageRGBA, searchDocument } from './render';
-import { selectText, textRuns } from './text';
+import { hasImages, selectText, textRuns } from './text';
 
 const session = new EngineSession();
 
@@ -32,6 +32,9 @@ const api: EngineApi = {
   },
   async fields(page) {
     return listFields(session.doc, page);
+  },
+  async hasImages(page) {
+    return hasImages(session.doc, page);
   },
   async textRuns(page) {
     return textRuns(session.doc, page);

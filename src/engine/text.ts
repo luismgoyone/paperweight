@@ -106,6 +106,24 @@ const toQuad = (q: mupdf.Quad): Quad => [
   { x: q[6], y: q[7] },
 ];
 
+/** Whether a page draws any image (a scan, for example). */
+export function hasImages(doc: mupdf.Document, pageIndex: number): boolean {
+  const page = doc.loadPage(pageIndex);
+  const stext = page.toStructuredText('preserve-images');
+  let found = false;
+  try {
+    stext.walk({
+      onImageBlock() {
+        found = true;
+      },
+    });
+  } finally {
+    stext.destroy();
+    page.destroy();
+  }
+  return found;
+}
+
 /** Quads of the text selected by dragging from `a` to `b` (page space). */
 export function selectText(doc: mupdf.Document, pageIndex: number, a: Point, b: Point): Quad[] {
   const page = doc.loadPage(pageIndex);

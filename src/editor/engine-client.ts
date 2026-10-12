@@ -83,6 +83,7 @@ export function createEngineClient(): EngineClient {
       ),
     search: (needle) => call(() => remote.search(needle)),
     textRuns: (page) => call(() => remote.textRuns(page)),
+    hasImages: (page) => call(() => remote.hasImages(page)),
     fields: (page) => call(() => remote.fields(page)),
     selectText: (page, a, b) => call(() => remote.selectText(page, a, b)),
     save: (options) => call(() => remote.save(options)),

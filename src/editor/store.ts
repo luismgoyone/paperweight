@@ -71,7 +71,8 @@ export type EditorState = {
   openFile(file: File): Promise<void>;
   submitPassword(password: string): Promise<void>;
   cancelPassword(): void;
-  commit(op: Op): Promise<void>;
+  /** Applies an op; resolves false if it was rejected (the user has been told why). */
+  commit(op: Op): Promise<boolean>;
   /**
    * Changes an added object based on its latest committed state (`fn` returns the new object,
    * or null to delete it). Runs in order with other edits, so quick successive changes can't
@@ -102,8 +103,14 @@ export type EditorState = {
   saveExport(bytes: Uint8Array): void;
   /** OCR in progress: which page and how far (0..1). */
   ocr: { page: number; progress: number } | null;
-  /** Recognises the text on scanned pages and adds an invisible text layer (spec §6 Phase 7). */
-  recognizePages(pages: number[]): Promise<void>;
+  /**
+   * Recognises the text on scanned pages and adds an invisible text layer (spec §6 Phase 7).
+   * 'scanned' means every page that has an image but no text.
+   */
+  recognizePages(pages: number[] | 'scanned'): Promise<void>;
+  cancelOcr(): void;
+  /** Whether a page has images (to tell scans from blank pages). */
+  pageHasImages(page: number): Promise<boolean>;
   /** Applies every marked redaction (one op per page). */
   applyRedactions(marks: { page: number; rect: Rect }[]): Promise<void>;
   /** Downloads a new PDF made of these pages. */
@@ -147,6 +154,7 @@ const documents = new Map<string, { bytes: Uint8Array; password?: string }>();
 // A PDF being inserted that is waiting for its password.
 let pendingInsert: { key: string; bytes: Uint8Array; file: File; at: number } | null = null;
 let inserting = false;
+let ocrCancelled = false;
 /** Resolves when the current engine has every bundled font (text ops need them). */
 let fontsRegistered: Promise<void> = Promise.resolve();
 // History changes and the engine sync that follows them run one at a time, so a failed op
@@ -335,6 +343,7 @@ export const useEditor = create<EditorState>()((set, get) => {
         pending = null;
         history.reset();
         useTools.getState().clearRedactMarks();
+        ocrCancelled = true; // a run for the previous document stops
         {
           // Images placed in the previous document are no longer needed; session signatures are.
           const keep = useTools.getState().signatures.map((s) => s.key);
@@ -440,16 +449,20 @@ export const useEditor = create<EditorState>()((set, get) => {
     },
 
     async commit(op) {
-      if (op.kind.startsWith('text.')) await fontsRegistered.catch(() => undefined);
+      // Text and OCR layers draw with the bundled fonts.
+      if (op.kind.startsWith('text.') || op.kind === 'ocr.addLayer')
+        await fontsRegistered.catch(() => undefined);
       return exclusive(async () => {
         history.push(op);
         try {
           await sync();
           if (op.kind.startsWith('page.')) afterPageChange();
+          return true;
         } catch (e) {
           history.rejectLast();
           set(historyFlags());
           get().showToast(`That change could not be applied: ${messageOf(e)}`);
+          return false;
         }
       });
     },
@@ -478,29 +491,75 @@ export const useEditor = create<EditorState>()((set, get) => {
       set({ insertPassword: null });
     },
 
-    async recognizePages(pages) {
-      const OCR_DPI = 300;
-      const scale = OCR_DPI / 72;
+    async recognizePages(which) {
+      if (get().ocr) return; // one run at a time
+      set({ ocr: { page: -1, progress: 0 } });
+      ocrCancelled = false;
+      const docId = get().docId;
+      let revision = get().revision;
+      // The run stops if the document changes underneath it (another file, page edits, undo):
+      // its page numbers and rendered geometry would no longer be right.
+      const unchanged = () => get().docId === docId && get().revision === revision;
+      let done = 0;
       try {
-        for (const page of pages) {
-          set({ ocr: { page, progress: 0 } });
-          const bitmap = await engineOrThrow().render(page, scale);
-          const words = await recognize(bitmap, scale, (progress) =>
-            set({ ocr: { page, progress } }),
-          );
-          bitmap.close();
-          if (words.length) await get().commit({ kind: 'ocr.addLayer', id: newId(), page, words });
+        let pages = which;
+        if (pages === 'scanned') {
+          pages = [];
+          for (let i = 0; i < get().pages.length; i++) {
+            if ((await get().getTextRuns(i)).length === 0 && (await get().pageHasImages(i)))
+              pages.push(i);
+          }
         }
-        get().showToast(
-          pages.length === 1
-            ? 'Text recognised. You can now search and select it.'
-            : `Text recognised on ${pages.length} pages.`,
-        );
+        for (const page of pages) {
+          if (ocrCancelled) break;
+          if (!unchanged()) {
+            get().showToast('Text recognition stopped because the document changed.');
+            return;
+          }
+          set({ ocr: { page, progress: 0 } });
+          const info = get().pages[page]!;
+          // 300 dpi, capped so huge pages stay within canvas limits.
+          const scale = Math.min(300 / 72, Math.sqrt(25_000_000 / (info.width * info.height)));
+          const bitmap = await engineOrThrow().render(page, scale);
+          let words;
+          try {
+            words = await recognize(bitmap, scale, (progress) => set({ ocr: { page, progress } }));
+          } finally {
+            bitmap.close();
+          }
+          if (ocrCancelled) break;
+          if (!unchanged()) {
+            get().showToast('Text recognition stopped because the document changed.');
+            return;
+          }
+          if (words.length) {
+            if (!(await get().commit({ kind: 'ocr.addLayer', id: newId(), page, words }))) return;
+            revision = get().revision;
+          }
+          done++;
+        }
+        if (ocrCancelled)
+          get().showToast(`Text recognition cancelled after ${done} page${done === 1 ? '' : 's'}.`);
+        else if (done === 0) get().showToast('No scanned pages to recognise.');
+        else
+          get().showToast(
+            done === 1
+              ? 'Text recognised. You can now search and select it.'
+              : `Text recognised on ${done} pages.`,
+          );
       } catch (e) {
         get().showToast(`Text recognition failed: ${messageOf(e)}`);
       } finally {
         set({ ocr: null });
       }
+    },
+
+    cancelOcr() {
+      ocrCancelled = true;
+    },
+
+    pageHasImages(page) {
+      return engineOrThrow().hasImages(page);
     },
 
     compress(dpi) {

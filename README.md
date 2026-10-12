@@ -36,7 +36,9 @@ Referrer-Policy: no-referrer
 
 - Scanned pages (no text layer) get a **Recognize text (OCR)** button. Tesseract runs in this
   tab and adds an invisible text layer, so the scan can be searched and selected and looks
-  exactly the same. English is included.
+  exactly the same. English is included. Recognised text is for searching and selecting; it
+  isn't edited in place (the scan image would still show the old words), which differs from
+  the original spec's "editable via Phase 5".
 - The OCR engine and language data (~8 MB) are served from this site and downloaded only the
   first time you use OCR. This is the one exception to "no requests after the page loads":
   those requests are plain downloads of the app's own files and never carry your document.
@@ -176,16 +178,17 @@ The full source is linked from the app ("Source code").
 
 ### Third-party licenses
 
-| Component                                | License                                                           |
-| ---------------------------------------- | ----------------------------------------------------------------- |
-| MuPDF.js (`mupdf`)                       | AGPL-3.0-or-later                                                 |
-| React, Zustand, Comlink                  | MIT / MIT / Apache-2.0                                            |
-| Tesseract.js, tesseract.js-core          | Apache-2.0                                                        |
-| English OCR model (tessdata_fast)        | Apache-2.0 ([license](public/tessdata/LICENSE-tessdata_fast.txt)) |
-| Liberation Sans, Serif, Mono             | SIL OFL 1.1 ([license](public/fonts/licenses/Liberation-OFL.txt)) |
-| Inter                                    | SIL OFL 1.1 ([license](public/fonts/licenses/Inter-OFL.txt))      |
-| Noto Sans, Noto Serif                    | SIL OFL 1.1 ([license](public/fonts/licenses/Noto-OFL.txt))       |
-| Dancing Script, Great Vibes (signatures) | SIL OFL 1.1 ([licenses](public/fonts/licenses/))                  |
+| Component                                             | License                                                           |
+| ----------------------------------------------------- | ----------------------------------------------------------------- |
+| MuPDF.js (`mupdf`)                                    | AGPL-3.0-or-later                                                 |
+| React, Zustand, Comlink                               | MIT / MIT / Apache-2.0                                            |
+| Tesseract.js, tesseract.js-core                       | Apache-2.0                                                        |
+| Leptonica and image codecs (inside tesseract.js-core) | BSD-2-Clause and others (see the core's license)                  |
+| English OCR model (tessdata_fast)                     | Apache-2.0 ([license](public/tessdata/LICENSE-tessdata_fast.txt)) |
+| Liberation Sans, Serif, Mono                          | SIL OFL 1.1 ([license](public/fonts/licenses/Liberation-OFL.txt)) |
+| Inter                                                 | SIL OFL 1.1 ([license](public/fonts/licenses/Inter-OFL.txt))      |
+| Noto Sans, Noto Serif                                 | SIL OFL 1.1 ([license](public/fonts/licenses/Noto-OFL.txt))       |
+| Dancing Script, Great Vibes (signatures)              | SIL OFL 1.1 ([licenses](public/fonts/licenses/))                  |
 
 Fonts are self-hosted and loaded once at startup (about 11 MB uncompressed), so the
 "no requests after load" guarantee holds while editing.

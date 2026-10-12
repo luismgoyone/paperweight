@@ -602,26 +602,32 @@ function OcrPrompt() {
   const getTextRuns = useEditor((s) => s.getTextRuns);
   const recognizePages = useEditor((s) => s.recognizePages);
   const ocr = useEditor((s) => s.ocr);
+  const cancelOcr = useEditor((s) => s.cancelOcr);
+  const pageHasImages = useEditor((s) => s.pageHasImages);
   const [scanned, setScanned] = useState<{ page: number; version: number; noText: boolean } | null>(
     null,
   );
 
   useEffect(() => {
     let live = true;
-    getTextRuns(currentPage).then(
-      (runs) => live && setScanned({ page: currentPage, version, noText: runs.length === 0 }),
+    // A scan is a page with an image and no text (blank pages don't need OCR).
+    Promise.all([getTextRuns(currentPage), pageHasImages(currentPage)]).then(
+      ([runs, images]) =>
+        live && setScanned({ page: currentPage, version, noText: runs.length === 0 && images }),
       () => undefined,
     );
     return () => {
       live = false;
     };
-  }, [getTextRuns, currentPage, version]);
+  }, [getTextRuns, pageHasImages, currentPage, version]);
 
   if (ocr) {
     return (
       <section className="border-t border-slate-200 p-4 text-sm" aria-live="polite">
         <p className="text-slate-700">
-          Recognising text on page {ocr.page + 1}… {Math.round(ocr.progress * 100)}%
+          {ocr.page < 0
+            ? 'Looking for scanned pages…'
+            : `Recognising text on page ${ocr.page + 1}… ${Math.round(ocr.progress * 100)}%`}
         </p>
         <div className="mt-2 h-1.5 rounded bg-slate-200">
           <div
@@ -629,6 +635,13 @@ function OcrPrompt() {
             style={{ width: `${Math.round(ocr.progress * 100)}%` }}
           />
         </div>
+        <button
+          type="button"
+          onClick={cancelOcr}
+          className="mt-2 text-xs font-medium text-slate-600 hover:text-slate-900"
+        >
+          Cancel
+        </button>
       </section>
     );
   }
@@ -651,12 +664,7 @@ function OcrPrompt() {
         {pageCount > 1 && (
           <button
             type="button"
-            onClick={async () => {
-              const pages: number[] = [];
-              for (let i = 0; i < pageCount; i++)
-                if ((await getTextRuns(i)).length === 0) pages.push(i);
-              void recognizePages(pages);
-            }}
+            onClick={() => void recognizePages('scanned')}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
           >
             All scanned pages

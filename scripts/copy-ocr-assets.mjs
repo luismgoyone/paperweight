@@ -19,4 +19,7 @@ for (const f of [
 ]) {
   copyFileSync(join(core, f), join(out, f));
 }
+// Apache-2.0 asks for the license to travel with the redistributed files.
+copyFileSync(join(tesseract, 'LICENSE.md'), join(out, 'LICENSE-tesseract.js.md'));
+copyFileSync(join(core, 'LICENSE'), join(out, 'LICENSE-tesseract.js-core.txt'));
 console.log('copied OCR assets to public/ocr/');
