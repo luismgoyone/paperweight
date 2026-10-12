@@ -153,3 +153,31 @@ describe('text.add', () => {
     }
   });
 });
+
+describe('pages that share content', () => {
+  it('adding text to one page never changes another page sharing its /Contents array', () => {
+    // Build a two-page PDF whose pages point at the same indirect Contents array.
+    const doc = new mupdf.PDFDocument();
+    const font = doc.addSimpleFont(new mupdf.Font('Helvetica'));
+    const resources = doc.addObject({ Font: { F1: font } });
+    const stream = doc.addStream('BT /F1 12 Tf 72 720 Td (Shared) Tj ET', {});
+    const contents = doc.addObject(doc.newArray());
+    contents.push(stream);
+    for (let i = 0; i < 2; i++) {
+      const page = doc.addPage([0, 0, 612, 792], 0, resources, '');
+      page.put('Contents', contents);
+      doc.insertPage(-1, page);
+    }
+    const s = new EngineSession();
+    s.open(doc.saveToBuffer('').asUint8Array().slice());
+    s.setOps([addText('t1', { box: { x: 100, y: 300, w: 200, h: 14 }, text: 'Only page one', style })]);
+    s.setOps([
+      addText('t1', { box: { x: 100, y: 300, w: 200, h: 14 }, text: 'Only page one', style }),
+      { kind: 'text.delete', id: 't1', page: 0 },
+      addText('t2', { box: { x: 100, y: 300, w: 200, h: 14 }, text: 'Again', style }),
+    ]);
+    const saved = mupdf.Document.openDocument(s.save(), 'application/pdf');
+    expect(textRuns(saved, 0).map((r) => r.text)).toEqual(['Shared', 'Again']);
+    expect(textRuns(saved, 1).map((r) => r.text)).toEqual(['Shared']);
+  });
+});

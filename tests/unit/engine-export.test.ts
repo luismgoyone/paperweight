@@ -67,3 +67,15 @@ describe('save options', () => {
     expect(s.doc.loadPage(0).getAnnotations()).toHaveLength(2);
   });
 });
+
+describe('flattening a password-protected file', () => {
+  it('stays encrypted and loses its annotations', () => {
+    const s = new EngineSession();
+    s.open(fixture('encrypted.pdf'), 'secret');
+    s.setOps(ops);
+    const flat = new mupdf.PDFDocument(s.save({ flatten: true }));
+    expect(flat.needsPassword()).toBe(true);
+    expect(flat.authenticatePassword('secret')).toBeGreaterThan(0);
+    expect(flat.loadPage(0).getAnnotations()).toHaveLength(0);
+  });
+});

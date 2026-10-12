@@ -30,14 +30,23 @@ function streamText(obj: mupdf.PDFObject): string {
   }
 }
 
-/** The page's /Contents as an array of stream objects (converting a single stream). */
+/**
+ * The page's /Contents as an array that belongs to this page alone. Pages may share one
+ * indirect Contents array (or stream), so we always give the page its own direct array holding
+ * the same stream references before changing anything.
+ */
 function contentsArray(doc: mupdf.PDFDocument, pageObj: mupdf.PDFObject): mupdf.PDFObject {
-  const contents = pageObj.get('Contents');
-  if (contents.isArray()) return contents;
-  const array = doc.newArray();
-  if (!contents.isNull()) array.push(contents);
-  pageObj.put('Contents', array);
-  return array;
+  const current = pageObj.get('Contents');
+  if (current.isArray() && !current.isIndirect()) return current;
+  const own = doc.newArray();
+  const resolved = current.resolve();
+  if (resolved.isArray()) {
+    for (let i = 0; i < resolved.length; i++) own.push(resolved.get(i));
+  } else if (!current.isNull()) {
+    own.push(current);
+  }
+  pageObj.put('Contents', own);
+  return own;
 }
 
 function ensureWrapped(doc: mupdf.PDFDocument, contents: mupdf.PDFObject): void {
