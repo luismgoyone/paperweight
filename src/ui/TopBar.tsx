@@ -14,7 +14,7 @@ import {
   UndoIcon,
 } from './icons';
 
-export const SOURCE_URL = 'https://github.com/luismgoyone/pdf-editor';
+export const SOURCE_URL = 'https://github.com/luismgoyone/paperweight';
 
 const iconButton =
   'inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 disabled:pointer-events-none disabled:opacity-40';

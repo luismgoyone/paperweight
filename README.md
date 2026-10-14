@@ -7,7 +7,7 @@ Paperweight is a free PDF editor that runs entirely in your browser. **Files nev
 No ads, no accounts, no tracking, no uploads. You open a PDF, edit it in the tab, and download
 the result. Closing the tab leaves nothing behind.
 
-> Live at **https://pdf-editor-navy.vercel.app**. All eight phases of the
+> Live at **https://paperweight.luisgoyone.com**. All eight phases of the
 > [design](docs/superpowers/specs/2026-10-12-pdf-editor-design.md) are built: viewer, markup,
 > add text, signatures, forms, images, page management, editing existing text, redaction,
 > compression, passwords, OCR and Word export; see the [Roadmap](#roadmap).
