@@ -25,7 +25,7 @@ test('offers the source code from the download menu once a file is open', async 
   await page.getByRole('button', { name: 'More download options' }).click();
   await expect(page.getByRole('menuitem', { name: /Source code \(AGPL\)/ })).toHaveAttribute(
     'href',
-    'https://github.com/luismgoyone/pdf-editor',
+    'https://github.com/luismgoyone/paperweight',
   );
 });
 
