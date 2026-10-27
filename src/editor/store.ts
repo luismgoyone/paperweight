@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { editedFileName } from '../shared/filename';
+import { downloadFileName, renamedFileName } from '../shared/filename';
 import { range, type PageRange } from '../shared/ranges';
 import type {
   FormField,
@@ -47,6 +47,10 @@ export type EditorState = {
   error: string | null;
   passwordError: boolean;
   fileName: string;
+  /** The user renamed the file, so downloads use fileName as-is. */
+  renamed: boolean;
+  /** Renames the open file (downloads and exports use the new name); blank names are ignored. */
+  renameFile(name: string): void;
   /** The open document has fillable form fields. */
   hasForm: boolean;
   /** Changes every time a document is opened; keys in-memory render caches. */
@@ -105,7 +109,7 @@ export type EditorState = {
   isProtected: boolean;
   /** A smaller copy of the document (not downloaded yet). */
   compress(dpi: number): Promise<{ bytes: Uint8Array; before: number; after: number }>;
-  /** Downloads bytes produced by an export (e.g. compress) under the edited file name. */
+  /** Downloads bytes produced by an export (e.g. compress) under the download file name. */
   saveExport(bytes: Uint8Array): void;
   /** OCR in progress: which page and how far (0..1). */
   ocr: { page: number; progress: number } | null;
@@ -368,6 +372,7 @@ export const useEditor = create<EditorState>()((set, get) => {
         set({
           status: 'ready',
           fileName: file.name,
+          renamed: false,
           hasForm: result.hasForm,
           isProtected: password !== undefined,
           docId: get().docId + 1,
@@ -409,6 +414,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     error: null,
     passwordError: false,
     fileName: '',
+    renamed: false,
     hasForm: false,
     insertPassword: null,
     isProtected: false,
@@ -597,8 +603,13 @@ export const useEditor = create<EditorState>()((set, get) => {
       return exclusive(() => engineOrThrow().compress({ dpi }));
     },
 
+    renameFile(name) {
+      const fileName = renamedFileName(name);
+      if (fileName && fileName !== get().fileName) set({ fileName, renamed: true });
+    },
+
     saveExport(bytes) {
-      saveFile(bytes, editedFileName(get().fileName));
+      saveFile(bytes, downloadFileName(get().fileName, get().renamed));
     },
 
     applyRedactions(marks) {
@@ -708,7 +719,7 @@ export const useEditor = create<EditorState>()((set, get) => {
           get().showToast(`The PDF could not be saved: ${messageOf(e)}`);
           return;
         }
-        saveFile(bytes, editedFileName(get().fileName));
+        saveFile(bytes, downloadFileName(get().fileName, get().renamed));
         history.markSaved();
         set(historyFlags());
       });

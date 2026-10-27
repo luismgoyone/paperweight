@@ -1,4 +1,4 @@
-import { useState, type RefObject } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { useEditor } from '../editor/store';
 import { ZOOM_STEPS, zoomIn, zoomOut } from '../editor/zoom';
 import { SearchBar } from './SearchBar';
@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
   DownloadIcon,
   MinusIcon,
+  PencilIcon,
   PlusIcon,
   RedoIcon,
   ShieldIcon,
@@ -98,6 +99,56 @@ function PageIndicator() {
       />
       <span className="tabular-nums">/ {count}</span>
     </label>
+  );
+}
+
+function FileName() {
+  const fileName = useEditor((s) => s.fileName);
+  const renameFile = useEditor((s) => s.renameFile);
+  const [draft, setDraft] = useState<string | null>(null);
+  // Removing the focused input can fire a blur; it mustn't commit a cancelled edit.
+  const cancelled = useRef(false);
+
+  if (draft !== null) {
+    const commit = () => {
+      if (!cancelled.current) renameFile(draft);
+      setDraft(null);
+    };
+    return (
+      <input
+        aria-label="File name"
+        autoFocus
+        value={draft}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          else if (e.key === 'Escape') {
+            cancelled.current = true;
+            setDraft(null);
+          }
+        }}
+        className="h-8 w-56 rounded-md border border-blue-500 px-2 text-sm text-neutral-900 outline-none"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid="file-name"
+      aria-label={`Rename ${fileName}`}
+      title={`${fileName} (click to rename)`}
+      onClick={() => {
+        cancelled.current = false;
+        setDraft(fileName.replace(/\.pdf$/i, ''));
+      }}
+      className="group inline-flex h-8 max-w-56 items-center gap-1.5 rounded-md px-2 text-sm text-neutral-700 hover:bg-neutral-100"
+    >
+      <span className="truncate">{fileName}</span>
+      <PencilIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />
+    </button>
   );
 }
 
@@ -255,7 +306,6 @@ export function PrivacyBadge() {
 
 export function TopBar({ searchInput }: { searchInput: RefObject<HTMLInputElement> }) {
   const ready = useEditor((s) => s.status === 'ready' || s.pages.length > 0);
-  const fileName = useEditor((s) => s.fileName);
   const canUndo = useEditor((s) => s.canUndo);
   const canRedo = useEditor((s) => s.canRedo);
   const undo = useEditor((s) => s.undo);
@@ -270,13 +320,7 @@ export function TopBar({ searchInput }: { searchInput: RefObject<HTMLInputElemen
       {ready && (
         <>
           <span className="h-5 w-px bg-neutral-200" />
-          <span
-            data-testid="file-name"
-            className="max-w-56 truncate text-sm text-neutral-700"
-            title={fileName}
-          >
-            {fileName}
-          </span>
+          <FileName />
           <div className="flex items-center">
             <button
               type="button"
