@@ -105,3 +105,39 @@ test('recovers from an engine crash without losing edits', async ({ page }) => {
   const { doc } = await downloadAndOpen(page, () => page.keyboard.press('ControlOrMeta+s'));
   expect(doc.getMetaData('info:Title')).toBe('Before crash');
 });
+
+test('renaming the file names the download after it', async ({ page }) => {
+  await page.getByTestId('file-name').click();
+  const input = page.getByRole('textbox', { name: 'File name' });
+  await expect(input).toHaveValue('simple');
+  await input.fill('Signed contract');
+  await input.press('Enter');
+  await expect(page.getByTestId('file-name')).toHaveText('Signed contract.pdf');
+
+  const { name } = await downloadAndOpen(page, () =>
+    page.getByRole('button', { name: 'Download PDF' }).click(),
+  );
+  expect(name).toBe('Signed contract.pdf');
+});
+
+test('Escape or a blank name leaves the file name alone', async ({ page }) => {
+  await page.getByTestId('file-name').click();
+  await page.getByRole('textbox', { name: 'File name' }).fill('nope');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('file-name')).toHaveText('simple.pdf');
+
+  await page.getByTestId('file-name').click();
+  await page.getByRole('textbox', { name: 'File name' }).fill('   ');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('file-name')).toHaveText('simple.pdf');
+
+  const { name } = await downloadAndOpen(page, () => page.keyboard.press('ControlOrMeta+s'));
+  expect(name).toBe('simple-edited.pdf');
+});
+
+test('⌘S while renaming saves under the new name', async ({ page }) => {
+  await page.getByTestId('file-name').click();
+  await page.getByRole('textbox', { name: 'File name' }).fill('quick');
+  const { name } = await downloadAndOpen(page, () => page.keyboard.press('ControlOrMeta+s'));
+  expect(name).toBe('quick.pdf');
+});
